@@ -1,0 +1,53 @@
+plugin/PLUGINS.md
+  6b83299305caf93b 1-180
+plugin/skills/wiki-tier/SKILL.md
+  6b83299305caf93b 1-192
+plugin/skills/wiki-init/SKILL.md
+  6b83299305caf93b 1-271
+.claude-plugin/marketplace.json
+  6b83299305caf93b 1-14
+plugin/skills/wiki-lint/SKILL.md
+  6b83299305caf93b 1-236
+plugin/skills/wiki-search/SKILL.md
+  6b83299305caf93b 1-157
+plugin/skills/wiki-digest/SKILL.md
+  6b83299305caf93b 1-171
+.codex-plugin/plugin.json
+  6b83299305caf93b 1-16
+plugin/skills/wiki-query/SKILL.md
+  6b83299305caf93b 1-277
+plugin/skills/wiki-ingest/SKILL.md
+  6b83299305caf93b 1-191
+SKILL.md
+  6b83299305caf93b 2-5,9,11-12,15,18,20-25,27,29,31-36,38-41,43,45,47-50,52-56,58,60,62-65,67-70,72,74,76-78,80-82,84-85,87,89,91-95,97,99,101-102,104-105,107-127,129,131-132,134-158,160,162-163,165,167,169-174,176-181,183-184,186,188-220,222,224-225,227-230,232,234-242,244-245,247,249-250,252,254-260,262,264-289,291,293-294,296,298,300-310,312,314-321,323-324,326,328-329,331-332,334-338,340,342,344,347-359,362-389,391-393,395-402,406-414
+README.md
+  6b83299305caf93b 1-397
+plugin/AGENTS.md
+  6b83299305caf93b 1-95
+plugin/skills/wiki-import/SKILL.md
+  6b83299305caf93b 1-282
+plugin/CLAUDE.md
+  6b83299305caf93b 1-217
+plugin/skills/wiki-graph/SKILL.md
+  6b83299305caf93b 1-234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "84f2be34eba54180d3d3038461cf16381e167238",
+  "prompts": {
+    "6b83299305caf93b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c57bc152-0160-4682-9a69-972dd2d21b8d",
+        "model": "unknown"
+      },
+      "human_author": "litianyi",
+      "messages": [],
+      "total_additions": 3876,
+      "total_deletions": 992,
+      "accepted_lines": 3297,
+      "overriden_lines": 0
+    }
+  }
+}
