@@ -1,0 +1,47 @@
+tests/run_smoke.py
+  71bfefbb24d24d8b 14,377-444
+README.md
+  71bfefbb24d24d8b 372-402
+docs/TRD-v1.7-watcher.md
+  71bfefbb24d24d8b 1-261
+docs/TASKS.md
+  71bfefbb24d24d8b 211-290
+SKILL.md
+  71bfefbb24d24d8b 3-4
+docs/watcher.md
+  71bfefbb24d24d8b 1-231
+tests/.gitignore
+  71bfefbb24d24d8b 8
+CHANGELOG.md
+  71bfefbb24d24d8b 7-47
+docs/PRD-v1.7-watcher.md
+  71bfefbb24d24d8b 1-188
+plugin/skills/wiki-watch/SKILL.md
+  71bfefbb24d24d8b 1-166
+plugin/.claude-plugin/plugin.json
+  71bfefbb24d24d8b 3-4
+.claude-plugin/marketplace.json
+  71bfefbb24d24d8b 10-11
+plugin/scripts/wiki_watch.py
+  71bfefbb24d24d8b 1-456
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "bd567b300aa7ffda398fc9d028f6d470a0c1d240",
+  "prompts": {
+    "71bfefbb24d24d8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "670fa8fd-3096-412a-9a6d-ad9ff3fd1d95",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "litianyi",
+      "messages": [],
+      "total_additions": 1788,
+      "total_deletions": 30,
+      "accepted_lines": 3514,
+      "overriden_lines": 0
+    }
+  }
+}
