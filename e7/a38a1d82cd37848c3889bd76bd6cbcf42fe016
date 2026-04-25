@@ -1,0 +1,51 @@
+.claude-plugin/marketplace.json
+  71bfefbb24d24d8b 10-11
+plugin/scripts/digest.py
+  71bfefbb24d24d8b 1-181
+.githooks/pre-commit
+  71bfefbb24d24d8b 1-41
+plugin/skills/wiki-search/SKILL.md
+  71bfefbb24d24d8b 23-54
+plugin/scripts/lint_naive.py
+  71bfefbb24d24d8b 1-233
+plugin/skills/wiki-digest/SKILL.md
+  71bfefbb24d24d8b 24-55
+tests/run_smoke.py
+  71bfefbb24d24d8b 445-509
+tests/.gitignore
+  71bfefbb24d24d8b 9-10
+README.md
+  71bfefbb24d24d8b 496-514
+plugin/skills/wiki-init/SKILL.md
+  71bfefbb24d24d8b 26-55
+plugin/skills/wiki-lint/SKILL.md
+  71bfefbb24d24d8b 33-70
+plugin/scripts/wiki_init.py
+  71bfefbb24d24d8b 1-248
+plugin/.claude-plugin/plugin.json
+  71bfefbb24d24d8b 3-4
+SKILL.md
+  71bfefbb24d24d8b 4
+CHANGELOG.md
+  71bfefbb24d24d8b 7-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e7a38a1d82cd37848c3889bd76bd6cbcf42fe016",
+  "prompts": {
+    "71bfefbb24d24d8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "670fa8fd-3096-412a-9a6d-ad9ff3fd1d95",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "litianyi",
+      "messages": [],
+      "total_additions": 1113,
+      "total_deletions": 7,
+      "accepted_lines": 3193,
+      "overriden_lines": 0
+    }
+  }
+}
