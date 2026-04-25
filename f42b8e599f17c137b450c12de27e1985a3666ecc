@@ -1,0 +1,258 @@
+.claude-plugin/marketplace.json
+  0000019dc4c4dac3 1-14
+README.md
+  0000019dc4c4dac3 1-475
+SKILL.md
+  0000019dc4c4dac3 1-435
+CHANGELOG.md
+  0000019dc4c4dac3 1-227
+plugin/scripts/schema_validate.py
+  0000019dc4c4dac3 1-269
+plugin/scripts/wiki_dream.py
+  0000019dc4c4dac3 1-400
+plugin/scripts/wiki_lib.py
+  0000019dc4c4dac3 1-650
+tests/build_dreaming_fixture.py
+  0000019dc4c4dac3 1-380
+tests/run_dreaming_eval.py
+  0000019dc4c4dac3 1-156
+tests/run_smoke.py
+  0000019dc4c4dac3 1-381
+docs/TRD-v1.6-autodreaming.md
+  0000019dc4c4dac3 1-338
+tests/dreaming_fixtures/market_research/papers/rlhf-paper.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/people/sam-altman.md
+  0000019dc4c4dac3 1-17
+docs/dogfood-v1.6.md
+  0000019dc4c4dac3 1-130
+tests/dreaming_fixtures/market_research/models/llama-3-1.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/papers/direct-preference-optimization.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/people/ilya-sutskever.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/people/noam-shazeer.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/companies/microsoft-ai.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/people/emad-mostaque.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/queries/blackwell-deployment-scale.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/companies/adept.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/companies/ada-company.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/events/gpt-4-announcement.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/companies/cohere.md
+  0000019dc4c4dac3 1-16
+templates/market_research/SCHEMA.md
+  0000019dc4c4dac3 1-184
+tests/dreaming_fixtures/market_research/events/llama-leak.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/companies/mistral.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/models/gemini-2.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/models/t5.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/papers/chain-of-thought.md
+  0000019dc4c4dac3 1-16
+docs/TASKS.md
+  0000019dc4c4dac3 1-213
+tests/dreaming_fixtures/market_research/papers/claude-paper.md
+  0000019dc4c4dac3 1-17
+docs/PRD-v1.6-autodreaming.md
+  0000019dc4c4dac3 1-160
+tests/dreaming_fixtures/market_research/models/universal-transformer-model.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/models/mpt-7b.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/papers/moe-foundational-paper.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/papers/universal-transformer-paper.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/companies/meta-ai.md
+  0000019dc4c4dac3 1-19
+tests/dreaming_fixtures/market_research/companies/openai.md
+  0000019dc4c4dac3 1-19
+docs/dreaming.md
+  0000019dc4c4dac3 1-180
+tests/dreaming_fixtures/market_research/events/stability-bankruptcy.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/models/glam.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/papers/gpt-3-paper.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/papers/gpt-4-paper.md
+  0000019dc4c4dac3 1-18
+plugin/skills/wiki-dream/SKILL.md
+  0000019dc4c4dac3 1-159
+tests/dreaming_fixtures/market_research/models/llama-3.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/papers/attention-is-all-you-need.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/people/mira-murati.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/people/yann-lecun.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/events/openai-saga-2023.md
+  0000019dc4c4dac3 1-19
+tests/dreaming_fixtures/market_research/log.md
+  0000019dc4c4dac3 1-47
+tests/dreaming_fixtures/market_research/trends/agents.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/papers/transformers-tutorial.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/trends/enterprise-ai.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/trends/moe-revival.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/trends/consolidation.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/trends/open-source-models.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/trends/voice-ai.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/index.md
+  0000019dc4c4dac3 1-3
+tests/dreaming_fixtures/market_research/companies/mosaic.md
+  0000019dc4c4dac3 1-19
+tests/dreaming_fixtures/market_research/models/bert.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/models/gpt-4.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/models/claude-3-opus.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/people/david-luan.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/models/gemini-1-5.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/models/switch-transformer.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/companies/google-deepmind.md
+  0000019dc4c4dac3 1-19
+tests/dreaming_fixtures/market_research/queries/databricks-acquires-mosaic.md
+  0000019dc4c4dac3 1-21
+tests/dreaming_fixtures/market_research/queries/voice-vision-converging.md
+  0000019dc4c4dac3 1-20
+tests/dreaming_fixtures/market_research/companies/databricks.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/events/google-bard-launch.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/companies/inflection.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/queries/mistral-large-2-released.md
+  0000019dc4c4dac3 1-18
+schema/wiki-schema.json
+  0000019dc4c4dac3 1-201
+tests/dreaming_fixtures/market_research/queries/anthropic-claude-3-7-released.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/queries/multimodal-research-summary.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/companies/deepseek.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/people/dario-amodei.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/trends/model-distillation.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/expected.json
+  0000019dc4c4dac3 1-69
+tests/dreaming_fixtures/market_research/models/gpt-4o.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/queries/deepseek-v3-paper-released.md
+  0000019dc4c4dac3 1-23
+plugin/.claude-plugin/plugin.json
+  0000019dc4c4dac3 1-19
+tests/dreaming_fixtures/market_research/papers/chinchilla-paper.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/trends/moe-architecture.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/companies/character-ai.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/models/gpt-2.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/models/bloom.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/events/chatgpt-launch.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/events/microsoft-inflection-deal.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/events/bing-ai-launch.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/models/gpt-3-5.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/people/demis-hassabis.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/papers/llama-2-paper.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/SCHEMA.md
+  0000019dc4c4dac3 1-184
+tests/dreaming_fixtures/market_research/companies/xai.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/events/nvidia-blackwell-launch.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/models/mpt-30b.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/papers/llama-paper.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/people/jensen-huang.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/trends/multimodal.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/trends/vector-databases.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/README.md
+  0000019dc4c4dac3 1-29
+tests/dreaming_fixtures/market_research/papers/mpt-paper.md
+  0000019dc4c4dac3 1-18
+tests/dreaming_fixtures/market_research/events/ai-act-passed.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/papers/mtp-paper.md
+  0000019dc4c4dac3 1-16
+tests/dreaming_fixtures/market_research/queries/multimodal-roundup-april.md
+  0000019dc4c4dac3 1-20
+tests/dreaming_fixtures/market_research/models/mistral-7b.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/companies/anthropic.md
+  0000019dc4c4dac3 1-19
+tests/dreaming_fixtures/market_research/models/claude-3-5-sonnet.md
+  0000019dc4c4dac3 1-17
+tests/dreaming_fixtures/market_research/models/mistral-large.md
+  0000019dc4c4dac3 1-17
+---
+{
+    "schema_version":  "authorship/3.0.0",
+    "git_ai_version":  "1.3.4",
+    "base_commit_sha":  "f42b8e599f17c137b450c12de27e1985a3666ecc",
+    "prompts":  {
+                    "71bfefbb24d24d8b":  {
+                                             "agent_id":  {
+                                                              "tool":  "claude",
+                                                              "id":  "670fa8fd-3096-412a-9a6d-ad9ff3fd1d95",
+                                                              "model":  "claude-opus-4-7"
+                                                          },
+                                             "human_author":  "litianyi",
+                                             "messages":  [],
+                                             "total_additions":  0,
+                                             "total_deletions":  0,
+                                             "accepted_lines":  0,
+                                             "overriden_lines":  0
+                                         },
+                    "0000019dc4c4dac3":  {
+                                             "agent_id":  {
+                                                              "tool":  "mock_ai",
+                                                              "id":  "ai-thread-mockai-1777122728643",
+                                                              "model":  "unknown"
+                                                          },
+                                             "human_author":  "litianyi",
+                                             "messages":  [],
+                                             "total_additions":  6818,
+                                             "total_deletions":  0,
+                                             "accepted_lines":  6818,
+                                             "overriden_lines":  0
+                                         }
+                }
+}
