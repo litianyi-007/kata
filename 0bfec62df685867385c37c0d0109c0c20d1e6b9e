@@ -1,0 +1,51 @@
+plugin/scripts/merge_log.py
+  0000019e01b65686 1-318
+tests/run_smoke.py
+  0000019e01b65686 1-1287
+---
+{
+    "schema_version":  "authorship/3.0.0",
+    "git_ai_version":  "1.4.1",
+    "base_commit_sha":  "0bfec62df685867385c37c0d0109c0c20d1e6b9e",
+    "prompts":  {
+                    "s_ab6f9e2fc11cb8::t_b9d899cab35bd6":  {
+                                                               "agent_id":  {
+                                                                                "tool":  "claude",
+                                                                                "id":  "b2397958-789a-4892-87d9-68214c134831",
+                                                                                "model":  "claude-opus-4-7"
+                                                                            },
+                                                               "human_author":  "litianyi \u003clitianyi@corp.netease.com\u003e",
+                                                               "messages":  [],
+                                                               "total_additions":  0,
+                                                               "total_deletions":  0,
+                                                               "accepted_lines":  0,
+                                                               "overriden_lines":  0
+                                                           },
+                    "s_ab6f9e2fc11cb8::t_3c7d30243c16f6":  {
+                                                               "agent_id":  {
+                                                                                "tool":  "claude",
+                                                                                "id":  "b2397958-789a-4892-87d9-68214c134831",
+                                                                                "model":  "claude-opus-4-7"
+                                                                            },
+                                                               "human_author":  "litianyi \u003clitianyi@corp.netease.com\u003e",
+                                                               "messages":  [],
+                                                               "total_additions":  0,
+                                                               "total_deletions":  0,
+                                                               "accepted_lines":  0,
+                                                               "overriden_lines":  0
+                                                           },
+                    "0000019e01b65686":  {
+                                             "agent_id":  {
+                                                              "id":  "ai-thread-mockai-1778145187462",
+                                                              "model":  "unknown",
+                                                              "tool":  "mock_ai"
+                                                          },
+                                             "human_author":  "litianyi",
+                                             "messages":  [],
+                                             "total_additions":  1605,
+                                             "total_deletions":  0,
+                                             "accepted_lines":  1605,
+                                             "overriden_lines":  0
+                                         }
+                }
+}
