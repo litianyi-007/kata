@@ -1,0 +1,36 @@
+docs/PRD-v1.8-sync.md
+  0000019e0174f7f9 1-1104
+---
+{
+    "schema_version":  "authorship/3.0.0",
+    "git_ai_version":  "1.4.1",
+    "base_commit_sha":  "5cfb932689b58fc2c8eeaf6880c63e406f504778",
+    "prompts":  {
+                    "s_ab6f9e2fc11cb8::t_ec8d98cb1f038a":  {
+                                                               "agent_id":  {
+                                                                                "tool":  "claude",
+                                                                                "id":  "b2397958-789a-4892-87d9-68214c134831",
+                                                                                "model":  "claude-opus-4-7"
+                                                                            },
+                                                               "human_author":  "litianyi \u003clitianyi@corp.netease.com\u003e",
+                                                               "messages":  [],
+                                                               "total_additions":  0,
+                                                               "total_deletions":  0,
+                                                               "accepted_lines":  0,
+                                                               "overriden_lines":  0
+                                                           },
+                    "0000019e0174f7f9":  {
+                                             "agent_id":  {
+                                                              "model":  "unknown",
+                                                              "id":  "ai-thread-mockai-1778140903417",
+                                                              "tool":  "mock_ai"
+                                                          },
+                                             "human_author":  "litianyi",
+                                             "messages":  [],
+                                             "total_additions":  1104,
+                                             "total_deletions":  0,
+                                             "accepted_lines":  1104,
+                                             "overriden_lines":  0
+                                         }
+                }
+}
