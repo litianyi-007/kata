@@ -1,0 +1,96 @@
+.claude-plugin/marketplace.json
+  0000019e028cce9c 1-26
+plugin/.claude-plugin/plugin.json
+  0000019e028cce9c 1-21
+SKILL.md
+  0000019e028cce9c 1-595
+plugin/AGENTS.md
+  0000019e028cce9c 1-118
+README.md
+  0000019e028cce9c 1-764
+---
+{
+    "schema_version":  "authorship/3.0.0",
+    "git_ai_version":  "1.4.1",
+    "base_commit_sha":  "d89f76ac812b32880e0567bb5395ea1c00074284",
+    "prompts":  {
+                    "s_ab6f9e2fc11cb8::t_46af1f2fd0e952":  {
+                                                               "agent_id":  {
+                                                                                "tool":  "claude",
+                                                                                "id":  "b2397958-789a-4892-87d9-68214c134831",
+                                                                                "model":  "claude-opus-4-7"
+                                                                            },
+                                                               "human_author":  "litianyi \u003clitianyi@corp.netease.com\u003e",
+                                                               "messages":  [],
+                                                               "total_additions":  0,
+                                                               "total_deletions":  0,
+                                                               "accepted_lines":  0,
+                                                               "overriden_lines":  0
+                                                           },
+                    "s_ab6f9e2fc11cb8::t_91603f10051529":  {
+                                                               "agent_id":  {
+                                                                                "tool":  "claude",
+                                                                                "id":  "b2397958-789a-4892-87d9-68214c134831",
+                                                                                "model":  "claude-opus-4-7"
+                                                                            },
+                                                               "human_author":  "litianyi \u003clitianyi@corp.netease.com\u003e",
+                                                               "messages":  [],
+                                                               "total_additions":  0,
+                                                               "total_deletions":  0,
+                                                               "accepted_lines":  0,
+                                                               "overriden_lines":  0
+                                                           },
+                    "s_ab6f9e2fc11cb8::t_962b495cc365b7":  {
+                                                               "agent_id":  {
+                                                                                "tool":  "claude",
+                                                                                "id":  "b2397958-789a-4892-87d9-68214c134831",
+                                                                                "model":  "claude-opus-4-7"
+                                                                            },
+                                                               "human_author":  "litianyi \u003clitianyi@corp.netease.com\u003e",
+                                                               "messages":  [],
+                                                               "total_additions":  0,
+                                                               "total_deletions":  0,
+                                                               "accepted_lines":  0,
+                                                               "overriden_lines":  0
+                                                           },
+                    "s_ab6f9e2fc11cb8::t_23b92afbc56b5c":  {
+                                                               "agent_id":  {
+                                                                                "tool":  "claude",
+                                                                                "id":  "b2397958-789a-4892-87d9-68214c134831",
+                                                                                "model":  "claude-opus-4-7"
+                                                                            },
+                                                               "human_author":  "litianyi \u003clitianyi@corp.netease.com\u003e",
+                                                               "messages":  [],
+                                                               "total_additions":  0,
+                                                               "total_deletions":  0,
+                                                               "accepted_lines":  0,
+                                                               "overriden_lines":  0
+                                                           },
+                    "s_ab6f9e2fc11cb8::t_431d19e2e60883":  {
+                                                               "agent_id":  {
+                                                                                "tool":  "claude",
+                                                                                "id":  "b2397958-789a-4892-87d9-68214c134831",
+                                                                                "model":  "claude-opus-4-7"
+                                                                            },
+                                                               "human_author":  "litianyi \u003clitianyi@corp.netease.com\u003e",
+                                                               "messages":  [],
+                                                               "total_additions":  0,
+                                                               "total_deletions":  0,
+                                                               "accepted_lines":  0,
+                                                               "overriden_lines":  0
+                                                           },
+                    "0000019e028cce9c":  {
+                                             "agent_id":  {
+                                                              "model":  "unknown",
+                                                              "tool":  "mock_ai",
+                                                              "id":  "ai-thread-mockai-1778159242908"
+                                                          },
+                                             "human_author":  "litianyi",
+                                             "messages":  [],
+                                             "total_additions":  1524,
+                                             "total_deletions":  0,
+                                             "accepted_lines":  1524,
+                                             "overriden_lines":  0
+                                         }
+                }
+}
