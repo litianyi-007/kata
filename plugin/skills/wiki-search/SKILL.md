@@ -79,6 +79,14 @@ ranking (title > tag > body > recency). The skill's job after the call:
 - Format each hit with title / type / tags / excerpt / related links
 - If results are thin (`<3` hits) and tier filter was implicit, surface
   the script's `suppressed_other_tiers` count and recommend `--tier=all`
+- **If `low_active_coverage: true`** (active hits < 20% of total
+  matches and total ≥ 3), call this out in the summary: the wiki has
+  historical coverage of this query but the current-state coverage is
+  thin. The caller may need to consult source code or recent material
+  rather than rely on the wiki alone.
+- **Use `tier_breakdown`** (aggregate over the full unfiltered match
+  set) as the one-glance "coverage shape" signal. Mention it in the
+  summary line, e.g. "16 hits (active 2 / archived 14 / frozen 0)".
 - Suggest follow-ups (`wiki-query` to synthesize, `wiki-graph --neighbors`
   to explore structure)
 

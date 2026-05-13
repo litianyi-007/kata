@@ -128,11 +128,27 @@ def main() -> int:
             if t and t != tier_filter:
                 suppressed[t] += 1
 
+    # Aggregate tier distribution over the full unfiltered match set.
+    # Lets a caller see "this query has X active / Y archived coverage"
+    # without scanning every result.
+    tier_breakdown = {"active": 0, "archived": 0, "frozen": 0}
+    for pid in all_candidates:
+        t = tier_map.get(pid)
+        if t in tier_breakdown:
+            tier_breakdown[t] += 1
+    total_matches = sum(tier_breakdown.values())
+    low_active_coverage = (
+        total_matches >= 3
+        and tier_breakdown["active"] / total_matches < 0.2
+    )
+
     emit({
         "query": args.query,
         "tier_filter": tier_filter,
         "passes": {"index": len(pass1), "frontmatter": len(pass2),
                    "body": len(pass3)},
+        "tier_breakdown": tier_breakdown,
+        "low_active_coverage": low_active_coverage,
         "results": [
             {
                 "path": p.path,
@@ -202,13 +218,34 @@ def _scan_body(pages, terms) -> set:
 
 
 def _excerpt(body: str, terms: list[str], pad: int = 60) -> str:
+    # Prefer body-content matches over heading matches. Wiki pages tend to
+    # repeat the title's keywords in H1/H2; matching the first occurrence
+    # then yielded excerpts that were just "# Title  ## Section Header …"
+    # with no substantive content. Strip heading lines first; fall back to
+    # the raw match if the body has no non-heading hit.
+    cleaned = re.sub(r"(?m)^#+[ \t].*$", "", body)
+    cleaned = re.sub(r"[ \t]*\n+[ \t]*", " ", cleaned).strip()
+    cleaned_l = cleaned.lower()
+    for t in terms:
+        i = cleaned_l.find(t)
+        if i >= 0:
+            start = max(0, i - pad)
+            end = min(len(cleaned), i + len(t) + pad)
+            snippet = cleaned[start:end].strip()
+            if snippet:
+                return (("…" if start > 0 else "") + snippet
+                        + ("…" if end < len(cleaned) else ""))
+    # Fallback: original heading-inclusive behavior — only reached when
+    # the term occurs solely inside heading lines.
     body_l = body.lower()
     for t in terms:
         i = body_l.find(t)
         if i >= 0:
             start = max(0, i - pad)
             end = min(len(body), i + len(t) + pad)
-            return ("…" if start > 0 else "") + body[start:end].replace("\n", " ") + ("…" if end < len(body) else "")
+            return (("…" if start > 0 else "")
+                    + body[start:end].replace("\n", " ")
+                    + ("…" if end < len(body) else ""))
     return body[:120].replace("\n", " ") + "…"
 
 
