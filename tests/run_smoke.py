@@ -16,6 +16,11 @@ import sys
 import time
 from pathlib import Path
 
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        # GitHub's Windows runner may default to cp1252; test logs contain UTF-8.
+        _stream.reconfigure(encoding="utf-8")
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "plugin" / "scripts"
 FIXTURE = ROOT / "tests" / "fixture"

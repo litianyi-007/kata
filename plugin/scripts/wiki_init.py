@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import sys
@@ -56,6 +57,11 @@ GITATTRIBUTES_LINES = (
     "# kata custom merge drivers (PRD-v1.8-sync §8)",
     "log.md   merge=akwiki-log",
 )
+
+
+def _configured_wiki_home() -> Path:
+    raw = os.environ.get("LLM_WIKI_HOME") or "~/.llm-wiki"
+    return Path(os.path.expandvars(raw)).expanduser().resolve()
 
 
 def main() -> int:
@@ -109,13 +115,13 @@ def main() -> int:
         from wiki_lib import find_wiki_root
         path = find_wiki_root()
 
-    # Standard layout guard: wikis must live under ~/.llm-wiki/<project>/.
+    # Standard layout guard: wikis must live under the configured wiki home.
     # Initializing inside a source repo (or any arbitrary path) is the
     # most common AI-agent mistake — it mixes wiki history with the
     # source-project history, defeats multi-machine sync conventions,
     # and breaks the cross-project `~/.llm-wiki/{project}` layout that
     # registry.yaml and skill defaults rely on. Refuse unless --force.
-    home_wiki_root = (Path.home() / ".llm-wiki").resolve()
+    home_wiki_root = _configured_wiki_home()
     try:
         path.relative_to(home_wiki_root)
         inside_standard_layout = True
@@ -129,11 +135,11 @@ def main() -> int:
             f"\n"
             f"  Initializing here is rejected because:\n"
             f"    - it mixes wiki history with the source project's git history\n"
-            f"    - multi-machine sync (v1.8) assumes ~/.llm-wiki/<project>\n"
+            f"    - multi-machine sync (v1.8) assumes one configured wiki home\n"
             f"    - skill path resolution + registry.yaml + cross-wiki vault\n"
             f"      federation all assume the standard layout\n"
             f"\n"
-            f"  Recommended: re-run with --path ~/.llm-wiki/<project-slug>\n"
+            f"  Recommended: re-run with --path {home_wiki_root}/<project-slug>\n"
             f"  Or if you truly need this path, add --force.",
             file=sys.stderr,
         )
