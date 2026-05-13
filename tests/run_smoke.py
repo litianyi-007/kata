@@ -133,6 +133,7 @@ def setup_sync_fixture(parent_dir):
     proc = subprocess.run(
         [sys.executable, str(SCRIPTS / "wiki_init.py"),
          "--path", str(bootstrap),
+         "--force",
          "--domain", "sync-test",
          "--categories", "notes",
          "--enable-sync"],
@@ -1161,6 +1162,7 @@ plugins:
     init_proc = subprocess.run(
         [sys.executable, str(SCRIPTS / "wiki_init.py"),
          "--path", str(init_target),
+         "--force",  # init_target is outside ~/.llm-wiki/<project>/ standard layout
          "--domain", "smoke test",
          "--categories", "entities,concepts",
          "--set-tags", "alpha,beta",
@@ -1237,6 +1239,7 @@ plugins:
     proc = subprocess.run(
         [sys.executable, str(SCRIPTS / "wiki_init.py"),
          "--path", str(init_dream),
+         "--force",
          "--domain", "dream smoke",
          "--categories", "notes",
          "--enable-dreaming"],
@@ -1262,6 +1265,7 @@ plugins:
     proc = subprocess.run(
         [sys.executable, str(SCRIPTS / "wiki_init.py"),
          "--path", str(init_sync),
+         "--force",
          "--domain", "sync smoke",
          "--categories", "notes",
          "--enable-sync"],
@@ -1306,6 +1310,7 @@ plugins:
     proc = subprocess.run(
         [sys.executable, str(SCRIPTS / "wiki_init.py"),
          "--path", str(init_tplsync),
+         "--force",
          "--template", "market_research",
          "--enable-sync"],
         capture_output=True, text=True, cwd=str(ROOT),
@@ -1847,7 +1852,7 @@ exit 0
     bootstrap18 = sync_dir18 / "_bootstrap"
     proc = subprocess.run(
         [sys.executable, str(SCRIPTS / "wiki_init.py"),
-         "--path", str(bootstrap18), "--domain", "first",
+         "--path", str(bootstrap18), "--force", "--domain", "first",
          "--categories", "notes", "--enable-sync"],
         capture_output=True, text=True, cwd=str(ROOT), check=True)
     _git(bootstrap18, "init", "-b", "main")
@@ -1864,7 +1869,7 @@ exit 0
     second = sync_dir18 / "second"
     proc = subprocess.run(
         [sys.executable, str(SCRIPTS / "wiki_init.py"),
-         "--path", str(second), "--domain", "second",
+         "--path", str(second), "--force", "--domain", "second",
          "--categories", "notes", "--enable-sync"],
         capture_output=True, text=True, cwd=str(ROOT), check=True)
     _git(second, "init", "-b", "main")

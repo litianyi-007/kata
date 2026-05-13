@@ -10,12 +10,24 @@
 # Skip if no Python on this machine.
 set -e
 
-if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
-    echo "[pre-commit] Python not found — skipping kata checks" >&2
+# Detect a working Python (Windows ships a Microsoft Store stub at
+# python.exe that exists per `command -v` but fails on execution; --version
+# probe filters those out).
+PYTHON=""
+for candidate in python3 python py; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        if [ "$candidate" = "py" ]; then
+            "$candidate" -3 --version >/dev/null 2>&1 && PYTHON="$candidate -3" && break
+        else
+            "$candidate" --version >/dev/null 2>&1 && PYTHON="$candidate" && break
+        fi
+    fi
+done
+
+if [ -z "$PYTHON" ]; then
+    echo "[pre-commit] No working Python found — skipping kata checks" >&2
     exit 0
 fi
-
-PYTHON="$(command -v python3 || command -v python)"
 
 # Only run if any of the relevant paths changed in this commit.
 RELEVANT_PATHS='^(plugin/scripts/|plugin/skills/|schema/|tests/|scripts/|SKILL\.md$|CHANGELOG\.md$)'
@@ -73,13 +85,13 @@ if [ -f "$BLOCKLIST" ]; then
 fi
 
 echo "[pre-commit] checking SKILL.md drift…"
-"$PYTHON" scripts/build_skill_md.py --check || {
+$PYTHON scripts/build_skill_md.py --check || {
     echo "[pre-commit] SKILL.md drift detected. Run: python scripts/build_skill_md.py" >&2
     exit 1
 }
 
 echo "[pre-commit] running smoke tests…"
-"$PYTHON" tests/run_smoke.py || {
+$PYTHON tests/run_smoke.py || {
     echo "[pre-commit] smoke tests failed. Fix or commit with --no-verify." >&2
     exit 1
 }

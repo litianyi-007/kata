@@ -257,6 +257,13 @@ essay — for now, ignore it."
    the user, files back. That's the structural answer to the L2-boundary
    failure mode the next essay will document.
 
+   *Honest scope note:* this essay is Kata's **Phase 1 reach** (AI-paired
+   engineering). Kata's core is a self-evolving wiki + auto-dreaming on
+   Karpathy's substrate; Phase 1 applies the core to project memory.
+   **Phase 2** — team spec authoring + dispute resolution as a self-closing
+   loop — is designed but not yet implemented. The compounding thesis here
+   generalizes; the specific moves don't.
+
 4. **Builder ladder call-out (added per style guide v1.2):** You don't
    need to use Kata to do this. Pick a kata for your team — fork ours,
    write your own, or adopt a different one entirely. The point isn't

@@ -1,28 +1,35 @@
 # Kata
 
-> **A workflow + project memory layer for AI-paired engineering.**
+> **A self-evolving knowledge system for AI-paired builders.**
 > Inherit a kata, adapt it to your project, then transcend the form.
 
-Kata is the workflow your AI agents read **before** they write code on your
-project. It compiles the part of "what should this code do" that doesn't live
-in the code itself — business thresholds, lifecycle invariants, domain
-conventions, the running record of decisions and disagreements — and keeps it
-current so the next session doesn't re-derive it from scratch.
+## What Kata is (the layered model)
 
-**Three movements per the kata mastery curve:**
+| Layer | What it is |
+|---|---|
+| **Base** | [Karpathy's LLM-Wiki principle](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — compiled once, kept current; humans curate, LLMs maintain; everything optional and modular. |
+| **Core** | A **self-evolving knowledge system** built on the base: (1) a self-closing loop — ingest → cross-link → filed-query → compounding pages; (2) auto-dreaming — frozen pages resurface when their relevance returns. The wiki doesn't just persist; it grows back toward what's currently mattering. |
+| **Phase 1** *(current)* | **AI-paired engineering.** Use the core wiki to compile project business semantics — thresholds, lifecycle invariants, domain conventions — so AI agents read project conventions before they write code. v1.4 → v1.11 ship this reach. |
+| **Phase 2** *(designed, not yet implemented)* | **Team spec authoring + dispute resolution.** A self-closing loop for spec drafts, ratified positions, and the rejected alternatives — so future decisions don't re-litigate the same questions. |
+| **Phase 3+** | Open. The core extends to new boundaries as we learn what compounds. |
 
-1. **Accept** — `wiki-init` lays down a starter form. Default categories,
-   default schema, default rituals. You run the kata as-is.
-2. **Adapt** — you customize the schema, add domain dimensions, extend skills
-   for your project's vocabulary. The kata becomes yours.
-3. **Transcend** — the form disappears. Your AI agents brief themselves,
-   maintain cross-links, surface contradictions. The workflow is invisible;
-   only the work remains.
+The **product** is the Core + Phase reaches. Phase 1 is the first concrete
+boundary; it's not the definition of Kata.
 
-The wiki itself is **compiled once and kept current** (not RAG — see the
-substrate section below). The human curates sources and asks good questions;
-the AI does all the bookkeeping — reading, summarizing, cross-referencing,
-filing, maintaining consistency. You (almost) never write wiki pages yourself.
+## The kata mastery curve
+
+1. **Accept** — `wiki-init` lays down a starter kata: default categories,
+   default schema, default rituals. You run the form as-is.
+2. **Adapt** — you customize schema, add domain dimensions, extend skills for
+   your project's vocabulary. The kata becomes yours.
+3. **Transcend** — the form fades. Your AI agents brief themselves, maintain
+   cross-links, resurface frozen knowledge when it matters again. The workflow
+   is invisible; only the work remains.
+
+The wiki is **compiled once and kept current** (not RAG). The human curates
+sources and asks good questions; the AI does all the bookkeeping — reading,
+summarizing, cross-referencing, filing, maintaining consistency. You (almost)
+never write wiki pages yourself.
 
 13 skills span ingest → search → graph → dream → sync — see the skill index
 further down. The product is the kata; the wiki is what it produces.

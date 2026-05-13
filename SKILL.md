@@ -1,6 +1,6 @@
 ---
 name: kata
-description: "Kata — a workflow + project memory layer for AI-paired engineering. Builders inherit a kata, adapt it to their project, transcend the form. Compiles business semantics that code-quality LLMs can't infer; manages spec authoring + disagreement. 13 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync) on a Karpathy-style llm-wiki substrate."
+description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 13 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync)."
 version: 2.0.0
 author: surebeli
 license: MIT
@@ -8,23 +8,30 @@ license: MIT
 
 # Kata (Standalone Prompt Version)
 
-> **A workflow + project memory layer for AI-paired engineering.**
+> **A self-evolving knowledge system for AI-paired builders.**
 > Inherit a kata, adapt it to your project, then transcend the form.
 
-Kata is the workflow your AI agents read **before** they write code on your project.
-It compiles the part of "what should this code do" that doesn't live in the code
-itself — business thresholds, lifecycle invariants, domain conventions, the
-running record of decisions — into a wiki that stays current as your project does.
+**The layered model:**
+
+- **Base** — Karpathy's LLM-Wiki principle: compiled once, kept current; humans
+  curate, LLMs maintain; everything optional and modular.
+- **Core** — A self-evolving knowledge system on the base: (1) self-closing
+  ingest/synthesis loop where filed queries compound back into pages; (2)
+  auto-dreaming that resurfaces frozen pages when their relevance returns.
+- **Phase 1 (current)** — AI-paired engineering. Use the core wiki to compile
+  business semantics (thresholds, lifecycle invariants, domain conventions) so
+  agents read project conventions before they write code.
+- **Phase 2 (designed, not yet implemented)** — Team spec authoring + dispute
+  resolution as a closed-loop wiki workflow.
+- **Phase 3+** — Open. The core extends as we learn what compounds.
 
 **The mastery curve:** accept (run the starter kata as-is) → adapt (customize
 schema + skills for your project) → transcend (the form fades; only the work
 remains).
 
 The wiki underneath is **compiled once and kept current** (not RAG — synthesis
-is baked into pages, cross-references are written down). The substrate is
-Karpathy's LLM-Wiki pattern; Kata is the workflow that turns it into a project
-memory layer for AI-paired teams. Cross-references are there. Contradictions
-have been flagged. Synthesis reflects everything ingested.
+is baked into pages, cross-references are written down). Cross-references are
+there. Contradictions have been flagged. Synthesis reflects everything ingested.
 
 > Obsidian is the IDE. The LLM is the programmer. The wiki is the codebase.
 
