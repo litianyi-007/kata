@@ -6,12 +6,34 @@
 
 ## Status
 
-**As of 2026-05-07: Pending — dogfood window has not yet started.**
+**As of 2026-05-14: Running on NECallKit wiki (week 1, day 7 of 28).**
 
-The setup table below still has placeholders. Until the wiki path,
-"dreaming enabled on" date, and day-1 page counts are filled in, **no
-weekly retrospective has comparable data**. Tuning, v1.8 announcement,
-and any v1.7 backlog remain blocked by this.
+Window scope shifted: the original framing was an "LLM application
+innovation" research wiki, but the actual v1.6 capability is being
+exercised on `~/.llm-wiki/NECallKit` since 2026-05-08 in parallel
+with the NECallKit HN-essay dogfood (see
+[`dogfood-necallkit-hn-essay.md`](dogfood-necallkit-hn-essay.md)).
+This is the real validation surface; the LLM-app-innovation wiki
+remains un-bootstrapped.
+
+- `~/.llm-wiki/NECallKit/SCHEMA.md` → `dreaming.enabled: true`
+- `~/.llm-wiki/NECallKit/dreaming/` → 6 daily run files
+  (2026-05-08 → 2026-05-13)
+- Window: **2026-05-08 → ~2026-06-05** (28 days from enable date)
+- Acceptance scoring (this file's weekly disposition tables): **not
+  yet filled in** — see Week 1 below for the first real entry.
+
+Tuning, v1.8 announcement, and v1.7 backlog remain gated on the
+acceptance scoring completing — not on usage, which is happening.
+
+> **Original framing notes (kept for context):** The text below was
+> written when this doc was scoped to the LLM-app-innovation research
+> wiki. The "Setup" / "Scenario" / "Frozen parameters" blocks still
+> describe the *intended* config and the *frozen* dreamer parameters
+> for the validation window. The "Action required from the maintainer"
+> startup checklist is no longer the active path — NECallKit already
+> bootstrapped via a different route. Weekly logs below use NECallKit
+> as the real corpus.
 
 > **v1.8 sync also Pending** — see `docs/dogfood-v1.8.md`. Recommended
 > plan: **run both windows in parallel on the same wiki, same 4 weeks**.
@@ -60,16 +82,16 @@ discussion notes resurface at the right time when new sources arrive.
 
 | | |
 |---|---|
-| Wiki path | _<fill in: e.g. `~/llm-app-innovation-wiki`>_ |
-| Dreaming enabled on | _<fill in: YYYY-MM-DD>_ |
-| Dogfood window | 4 weekly runs from first scheduled run |
-| Cadence | weekly · Sunday 23:00 |
-| Scenario | LLM application innovation: research, source acquisition, synthesis, discussion |
-| Initial config | `entity 0.5 / tag 0.2 / citation 0.4 / threshold 0.6 / dormancy 90d / resurgence min_count 2` |
-| Total wiki pages on day 1 | _<fill in>_ |
-| Tier distribution on day 1 | active __ / archived __ / frozen __ |
-| Execution host | Claude Code / Codex CLI / standalone LLM / mixed |
-| Schedule method | Claude `/schedule` / cron / Task Scheduler / manual weekly |
+| Wiki path | `~/.llm-wiki/NECallKit` (real corpus, ~110 pages as of 2026-05-12) |
+| Dreaming enabled on | 2026-05-08 |
+| Dogfood window | 4 weeks from enable = 2026-05-08 → ~2026-06-05 |
+| Cadence | daily run cadence (see `dreaming/` files), not weekly |
+| Scenario | NECallKit multi-platform SDK monorepo — Web/Electron/Mobile reuse, bugfix preflight, spec authoring |
+| Initial config | `entity 0.5 / tag 0.2 / citation 0.4 / threshold 0.6 / dormancy 90d / resurgence min_count 2` (frozen) |
+| Total wiki pages on day 1 | ~50 (grew to ~110 by 2026-05-12) |
+| Tier distribution on day 1 | mostly active at start; archived layer grew as 2026-04-20 reuse work crystallized |
+| Execution host | Codex CLI (Codex Desktop sessions) + Claude Code mixed |
+| Schedule method | manual + cron on the NECallKit dogfood host |
 | Execution guide | [dogfood-guide-v1.6.md](dogfood-guide-v1.6.md) |
 
 ## Scenario boundaries
@@ -136,44 +158,69 @@ After each weekly run:
 
 ## Weekly logs
 
-### Week 1 — YYYY-MM-DD
+### Week 1 — 2026-05-08 → 2026-05-14
 
-**Run summary**
+**Run summary** (NECallKit corpus, daily dreaming runs)
 
-- Candidates: __ / pool size __
-- Fresh pages this period: __
-- Resurgent tags: __
-- New raw sources ingested: articles __ / papers __ / transcripts __ / external __
-- New synthesis pages: briefs __ / comparisons __ / trends __
-- New discussion pages: __
-- Runtime: __
+- Daily run files: `dreaming/2026-05-08.md` through `dreaming/2026-05-13.md` (6 files)
+- Wiki pages: ~50 day-1 → ~110 by 2026-05-12
+- Acceptance/reject disposition: **not yet recorded per-candidate** —
+  the dreaming files exist but the structured "for each candidate:
+  accept/reject" log has not been kept. **Action**: do this before
+  Week 2 ends; otherwise Week 1 has no acceptance-rate datum.
 
-**Disposition**
+**Disposition** — placeholder until per-day candidate review is done
 
 | # | Page | Score | Reasons (short) | Decision | Notes |
 |---|------|-------|-----------------|----------|-------|
-| 1 |      |       |                 | ✅/❌    |       |
-| 2 |      |       |                 | ✅/❌    |       |
-| 3 |      |       |                 | ✅/❌    |       |
+|   |      |       |                 |          | review pending |
 
 **Surprises** — pages I'd forgotten existed, or connections I hadn't seen:
 
--
+- **wiki-search archived-tier signal is load-bearing.** Codex
+  session 2026-05-14 (id `019e2234-61d2-7a13-ad96-bf0388531a42`) ran
+  3 search queries for an Electron Vue2 reuse spec; 28/30 top hits
+  were `archived`. The archived layer correctly gave the
+  Web/Electron architecture boundary (`packages/` shared core +
+  thin wrappers) that grounded the entire final spec
+  recommendation. Detailed log in
+  [`dogfood-necallkit-hn-essay.md`](dogfood-necallkit-hn-essay.md)
+  under "2026-05-14 — wiki-search natural experiment".
+- **Vue2 was a coverage gap the wiki never named.** The agent had to
+  infer it from "all queries returned archived." A coverage-matrix
+  dreamer (idea logged in `docs/idea-coverage-matrix-dreamer.md`)
+  would have flagged stack=Vue2 × platform=Electron as an empty cell
+  with surrounding active coverage on Vue3.
 
 **Tuning thoughts** — would I want a different threshold / weight if I
 were running this for a year?
 
--
+- **Do not change frozen parameters this window.** `entity 0.5 / tag 0.2 / citation 0.4 / threshold 0.6 / dormancy 90d / resurgence min_count 2` stay locked through 2026-06-05.
+- Two ergonomic fixes to `search_naive.py` are queued (not
+  dreamer-config changes, so within-window-safe):
+  1. add `tier_breakdown` aggregate to JSON envelope
+  2. fix `_excerpt()` body-bias — current output is heading-noise
+- **v1.7+ idea** (post-window): coverage-matrix dream strategy as a
+  second strategy alongside co-occurrence. Sketched at
+  `docs/idea-coverage-matrix-dreamer.md`.
 
 **Bugs / annoyances** — anything the script did that felt wrong:
 
--
+- `search_naive.py` excerpt is title + section header, not body content
+- no aggregate tier breakdown — agent must scan all results to see pattern
+- no "low active coverage" hint when archived/active ratio is extreme
 
-**Scenario fit** — did this help the LLM app-innovation workflow?
+**Scenario fit** — did this help the NECallKit dogfood workflow?
 
-- Research direction clarified: yes / no. Notes:
-- Information acquisition improved: yes / no. Notes:
-- Discussion reuse improved: yes / no. Notes:
+- Research direction clarified: yes. Wiki architecture boundary
+  framed the Vue2 spec recommendation; agent didn't need to
+  re-derive it from scratch.
+- Information acquisition improved: partial. Vue3 reuse covered;
+  Vue2 gap forced source archeology (3 source files read after wiki
+  miss).
+- Discussion reuse improved: yes. Unified contract decision
+  (`electron-web-unified-public-contract.md`) was picked up and
+  carried into spec open questions.
 
 ### Week 2 — YYYY-MM-DD
 

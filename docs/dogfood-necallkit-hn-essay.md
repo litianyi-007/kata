@@ -3737,3 +3737,130 @@ Per the §Essay Material Ledger framing (top of file):
 The dogfood essay file itself is now ~3400 lines of evidence; the HN
 essay published version should target 2-3k words and link out to this
 file for full evidence trail.
+
+## 2026-05-14 — wiki-search natural experiment: archived-heavy hit pattern (v1.6 evidence)
+
+**Context.** Codex Desktop session
+`019e2234-61d2-7a13-ad96-bf0388531a42` (started 2026-05-14T00:38:38+08:00,
+cwd `<workspace>\project\NECallKit`) ran `knock-it-out` to spec a new
+F016 task: Electron Vue2 UIKit reuse aligned with the existing
+Web/Electron Vue3 path. The agent followed `knock-it-out`'s
+"wiki first, then source" rule and emitted three `search_naive.py`
+queries against `~/.llm-wiki/NECallKit` before reading any source.
+
+**Tier hit distribution (3 queries × top 10 results).**
+
+| Query | Active hits | Archived hits |
+|---|---|---|
+| `Electron Vue2 web-vue3 reuse vue3-uikit` | 0 | 10 |
+| `electron web reuse thin wrapper shared core` | 1 | 9 |
+| `Web basic-vue2 Vue2 demo callkit-vue2-ui` | 2 | 8 |
+
+Effective: 28 of 30 top-tier-all hits were archived. Two active hits
+were `modules/electron-web-api-reuse-and-merge-back-switch-contract.md`
+and `decisions/002-electron-callkit-web-master-diff-assessment-2026-04-25.md`.
+
+**Agent self-narration (verbatim, agent message stream).**
+
+- #51: "wiki 命中很强，但多数是归档层资料；这意味着它能给架构边界，
+  不足以直接决定今天这条 Vue2 新任务。"
+- #76: "Wiki Answer Confidence: 0.66（Medium）. Vue2 没有被 wiki
+  明确纳入既有 Electron/Web reuse 主链路，当前资料主要覆盖
+  React + Vue3 + 1v1 + external."
+
+The agent then read 5 archived pages individually (handbook, quick
+reference, upgrade-readiness review, compat matrix, follow-up plan)
+before pivoting to source (`packages/`, `Web/basic-vue2/`,
+`Electron/vue3-uikit/`). Final output: a spec proposing
+`F016-electron-vue2-uikit-reuse` with a recommended architecture
+(`callkit-vue2-core + runtime-electron` thin wrapper) plus 5 explicit
+open questions.
+
+**What this proves about the tier model (positive).**
+
+The archived layer was **load-bearing**, not noise. The architecture
+boundary "`packages/` carries domain/runtime/framework core; `Web/` and
+`Electron/` are thin wrappers; example is consumer template only" came
+out of archived pages and shaped every line of the final spec
+recommendation. The tier system surfaced the right corpus.
+
+**What this proves about wiki-search ergonomics (negative).**
+
+The agent needed to scan all 10 results in each output to realize the
+archived-heavy pattern. There is no aggregate `tier_breakdown` in the
+search envelope, so the "low active coverage on Vue2" signal was
+inferred page-by-page rather than read once. Cost: ~10 extra shell
+calls (read 5 archived pages + 3 source files) before the spec could
+be drafted.
+
+Excerpts were also low-value: returned strings like
+`"# Electron/Web reuse 在 NECallKit 多平台仓库中的维护边界  ## Question  Electron/We…"`
+— title plus section header, almost no body. The agent had to open
+each page to see what it actually claimed.
+
+**Surprises (v1.6 dogfood log slot).**
+
+- archived hits were architecturally useful even when not directly
+  decision-bearing — the tier signal lets the agent know "this is
+  stable history, take it as ground but don't act on it as live state."
+  That distinction is doing real work.
+- Vue2 was a coverage gap that the wiki never named. The agent
+  detected it inductively (all hits archived for vue2-specific terms)
+  rather than by an explicit "this domain is uncovered" signal. A
+  coverage-matrix dreamer strategy would have flagged the Vue2 ×
+  Electron empty cell automatically.
+
+**Tuning thoughts (v1.6 dogfood log slot — for week-4 retrospective).**
+
+1. Add `tier_breakdown: {active: N, archived: M, frozen: K}` to
+   `search_naive.py` JSON envelope. One-glance signal, saves the
+   per-result scan.
+2. Fix `_excerpt()` body-bias: prefer body matches over title matches,
+   or skip leading H1/H2 region. Current output is heading-noise.
+3. **Do not tune** dreamer weights/thresholds mid-window. These two
+   ergonomic fixes are about the search surface, not the v1.6 frozen
+   parameters (`entity 0.5 / tag 0.2 / citation 0.4 / threshold 0.6`).
+
+**Coverage-gap as a feature idea (v1.7+ backlog).**
+
+The wiki had full Vue3 × {Web, Electron} coverage, full React × Web
+coverage, and zero Vue2 × Electron coverage. Co-occurrence dreaming
+does not see absent cells. A "coverage-matrix" dream strategy that
+treats stack × platform as an implicit grid could emit candidates of
+the form "stack=Vue2 × platform=Electron has 0 active pages but 8
+archived hits in last query month — consider creating a current-state
+page." See `docs/idea-coverage-matrix-dreamer.md` for the full sketch.
+
+**Bugs / annoyances (v1.6 dogfood log slot).**
+
+- excerpt = title + section header, not body content (see fix #2 above)
+- no aggregate tier breakdown (see fix #1 above)
+- no signal when a query has 0 active hits but high archived count —
+  this is the "low active coverage" hint the agent has to infer manually
+
+**Scenario fit (v1.6 dogfood log slot).**
+
+- Research direction clarified: yes — wiki architecture boundary
+  framed the Vue2 spec recommendation.
+- Information acquisition improved: partial — archived layer covered
+  Vue3 reuse; Vue2 needed source archeology.
+- Discussion reuse improved: yes — the agent picked up the unified
+  contract decision (`electron-web-unified-public-contract.md`) and
+  carried it through to spec open questions.
+
+**Quantitative.**
+
+- 3 queries × 10 results = 30 hits returned
+- 28/30 archived, 2/30 active
+- 5 archived pages read in full before pivot
+- 3 source files read after pivot (`package.json` × 2, `vite.config.ts`)
+- ~20 shell calls between first search and final spec
+- Final output: 1 spec recommendation + 5 open questions, no source
+  edits requested
+
+**Citation handles for the essay.**
+
+- Codex session id: `019e2234-61d2-7a13-ad96-bf0388531a42`
+- Session jsonl: `~/.codex/sessions/2026/05/14/rollout-2026-05-14T00-38-38-...jsonl`
+- Final spec target path: `docs/prd/F016-electron-vue2-uikit-reuse/`
+  (not yet created on NECallKit side)
