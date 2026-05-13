@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <style>
+      .title { font-size: 20px; font-weight: 600; fill: #111827; }
+      .subtitle { font-size: 13px; fill: #6b7280; }
+      .section-label { font-size: 11px; font-weight: 500; fill: #9ca3af; letter-spacing: 0.08em; }
+      .axis-label { font-size: 12px; fill: #6b7280; font-weight: 500; }
+      .tick-label { font-size: 11px; fill: #9ca3af; }
+      .event-label { font-size: 12px; font-weight: 500; fill: #111827; }
+      .value-label { font-size: 13px; font-weight: 600; fill: #111827; }
+      .secondary-label { font-size: 10px; fill: #9ca3af; }
+      .callout-text { font-size: 12px; fill: #374151; }
+      .callout-accent { font-size: 12px; font-weight: 600; fill: #111827; }
+      .legend-text { font-size: 13px; fill: #374151; }
+      .legend-token { font-size: 13px; font-weight: 500; fill: #111827; }
+      .footer { font-size: 11px; fill: #9ca3af; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="760" fill="#ffffff"/>
+
+  <text x="60" y="38" class="section-label">WIKI COMPOUNDING &#8212; DOGFOOD DATA</text>
+  <text x="60" y="65" class="title">Edges grow fastest when synthesis is filed back</text>
+  <text x="60" y="87" class="subtitle">NECallKit dogfood. 2026-05-07 to 2026-05-08. kata edges vs imports.</text>
+
+  <!-- plot area: very subtle border -->
+  <rect x="120" y="120" width="960" height="440" fill="#fafafa" stroke="#e5e7eb" stroke-width="1" rx="4"/>
+
+  <!-- grid: extremely subtle -->
+  <line x1="120" y1="560" x2="1080" y2="560" stroke="#e5e7eb" stroke-width="1"/>
+  <line x1="120" y1="497" x2="1080" y2="497" stroke="#f3f4f6" stroke-width="0.5" stroke-dasharray="2,4"/>
+  <line x1="120" y1="434" x2="1080" y2="434" stroke="#f3f4f6" stroke-width="0.5" stroke-dasharray="2,4"/>
+  <line x1="120" y1="371" x2="1080" y2="371" stroke="#f3f4f6" stroke-width="0.5" stroke-dasharray="2,4"/>
+  <line x1="120" y1="309" x2="1080" y2="309" stroke="#f3f4f6" stroke-width="0.5" stroke-dasharray="2,4"/>
+  <line x1="120" y1="246" x2="1080" y2="246" stroke="#f3f4f6" stroke-width="0.5" stroke-dasharray="2,4"/>
+  <line x1="120" y1="183" x2="1080" y2="183" stroke="#f3f4f6" stroke-width="0.5" stroke-dasharray="2,4"/>
+  <line x1="120" y1="120" x2="1080" y2="120" stroke="#f3f4f6" stroke-width="0.5" stroke-dasharray="2,4"/>
+
+  <text x="110" y="564" text-anchor="end" class="tick-label">0</text>
+  <text x="110" y="501" text-anchor="end" class="tick-label">20</text>
+  <text x="110" y="438" text-anchor="end" class="tick-label">40</text>
+  <text x="110" y="375" text-anchor="end" class="tick-label">60</text>
+  <text x="110" y="313" text-anchor="end" class="tick-label">80</text>
+  <text x="110" y="250" text-anchor="end" class="tick-label">100</text>
+  <text x="110" y="187" text-anchor="end" class="tick-label">120</text>
+  <text x="110" y="124" text-anchor="end" class="tick-label">140</text>
+  <text x="40" y="340" text-anchor="middle" class="section-label" transform="rotate(-90, 40, 340)">EDGES</text>
+
+  <!-- line: pure monochrome black -->
+  <path d="M 120,560 L 360,478 L 600,346 L 840,293 L 1080,139" fill="none" stroke="#111827" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- data points: minimal, white-filled black outline; t3 is filled black -->
+  <circle cx="120" cy="560" r="5" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+  <circle cx="360" cy="478" r="5" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+  <circle cx="600" cy="346" r="5" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+  <circle cx="840" cy="293" r="7" fill="#111827" stroke="#111827" stroke-width="2"/>
+  <circle cx="1080" cy="139" r="5" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+
+  <text x="120" y="548" text-anchor="middle" class="value-label">0</text>
+  <text x="360" y="468" text-anchor="middle" class="value-label">26</text>
+  <text x="600" y="336" text-anchor="middle" class="value-label">68</text>
+  <text x="840" y="282" text-anchor="middle" class="callout-accent">85</text>
+  <text x="1060" y="131" text-anchor="end" class="value-label">134</text>
+
+  <text x="140" y="575" class="secondary-label">pages=56</text>
+  <text x="380" y="493" class="secondary-label">pages=61</text>
+  <text x="620" y="361" class="secondary-label">pages=69</text>
+  <text x="860" y="310" class="secondary-label">pages=70</text>
+  <text x="1075" y="158" text-anchor="end" class="secondary-label">pages=77</text>
+
+  <line x1="120" y1="560" x2="120" y2="566" stroke="#9ca3af" stroke-width="1"/>
+  <line x1="360" y1="560" x2="360" y2="566" stroke="#9ca3af" stroke-width="1"/>
+  <line x1="600" y1="560" x2="600" y2="566" stroke="#9ca3af" stroke-width="1"/>
+  <line x1="840" y1="560" x2="840" y2="566" stroke="#111827" stroke-width="1.5"/>
+  <line x1="1080" y1="560" x2="1080" y2="566" stroke="#9ca3af" stroke-width="1"/>
+
+  <text x="120" y="600" text-anchor="middle" class="event-label">t0</text>
+  <text x="360" y="600" text-anchor="middle" class="event-label">t1</text>
+  <text x="600" y="600" text-anchor="middle" class="event-label">t2</text>
+  <text x="840" y="600" text-anchor="middle" class="event-label" font-weight="700">t3</text>
+  <text x="1080" y="600" text-anchor="middle" class="event-label">t4</text>
+
+  <!-- callouts: thin border, no fill flourish -->
+  <rect x="170" y="511" width="170" height="22" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="255" y="526" text-anchor="middle" class="callout-text">+26 edges (+5 pages)</text>
+  <rect x="410" y="398" width="170" height="22" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="495" y="413" text-anchor="middle" class="callout-text">+42 edges (+8 pages)</text>
+  <!-- highlight: bolder border, same family, blue accent -->
+  <rect x="660" y="240" width="200" height="44" rx="4" fill="#ffffff" stroke="#111827" stroke-width="2"/>
+  <text x="760" y="260" text-anchor="middle" class="callout-accent">+17 edges from 1 page</text>
+  <text x="760" y="275" text-anchor="middle" class="callout-text">synthesis bonus</text>
+  <line x1="785" y1="284" x2="840" y2="286" stroke="#111827" stroke-width="1" stroke-dasharray="3,2"/>
+  <rect x="900" y="202" width="170" height="22" rx="4" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="985" y="217" text-anchor="middle" class="callout-text">+49 edges (+7 pages)</text>
+
+  <!-- divider -->
+  <line x1="60" y1="630" x2="1140" y2="630" stroke="#e5e7eb" stroke-width="1"/>
+
+  <text x="60" y="655" class="section-label">EVENTS</text>
+  <text x="60" y="678" class="legend-token">t0</text>
+  <text x="100" y="678" class="legend-text">&#8212; Feature dossier imported (56 pages, 0 edges &#8212; the import baseline)</text>
+  <text x="60" y="697" class="legend-token">t1</text>
+  <text x="100" y="697" class="legend-text">&#8212; Two maintainer-decision queries filed (61 pages, 26 edges)</text>
+  <text x="60" y="716" class="legend-token">t2</text>
+  <text x="100" y="716" class="legend-text">&#8212; Project operating context imported (69 pages, 68 edges)</text>
+  <text x="60" y="735" class="legend-token" font-weight="700">t3</text>
+  <text x="100" y="735" class="legend-text">&#8212; Operating-boundary query filed &#8212; <tspan font-weight="700">1 page, +17 edges</tspan> (70 pages, 85 edges)</text>
+  <text x="60" y="754" class="legend-token">t4</text>
+  <text x="100" y="754" class="legend-text">&#8212; Lessons seed (6 pages) + preflight query (1 page) (77 pages, 134 edges)</text>
+
+</svg>

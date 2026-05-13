@@ -1,0 +1,26 @@
+{
+  "name": "kata",
+  "version": "2.0.0",
+  "description": "A workflow + project memory layer for AI-paired engineering. Builders inherit a kata, adapt it to their project, and eventually transcend the form. Compiles business semantics (the part code-quality LLMs can't infer), manages spec authoring + disagreement, and lets agents read project conventions before they write code. 13 skills (init, import, ingest, search, graph, tier, digest, query, lint, config, dream, watch, sync) on a Karpathy-style llm-wiki substrate. Multi-CLI session ingest in flight (v1.11).",
+  "author": {
+    "name": "surebeli",
+    "url": "https://github.com/surebeli"
+  },
+  "homepage": "https://github.com/surebeli/kata",
+  "repository": "https://github.com/surebeli/kata",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "ai-paired-engineering",
+    "project-memory",
+    "builder",
+    "kata",
+    "wiki",
+    "knowledge-base",
+    "markdown",
+    "obsidian",
+    "multi-llm",
+    "multi-machine-sync",
+    "spec-management"
+  ]
+}

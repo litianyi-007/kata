@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', 'Microsoft YaHei', monospace">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f0f1a"/>
+      <stop offset="100%" stop-color="#1a1a2e"/>
+    </linearGradient>
+    <style>
+      .title { font-size: 22px; font-weight: 700; fill: #e2e8f0; letter-spacing: 0.02em; }
+      .subtitle { font-size: 14px; fill: #94a3b8; letter-spacing: 0.02em; }
+      .col-header { font-size: 18px; font-weight: 700; fill: #ffffff; letter-spacing: 0.02em; }
+      .col-sub { font-size: 13px; fill: #ffffff; opacity: 0.85; }
+      .cell-label { font-size: 12px; font-weight: 700; fill: #64748b; letter-spacing: 0.08em; }
+      .bug-id { font-size: 14px; font-weight: 700; fill: #22d3ee; }
+      .bug-detail { font-size: 13px; fill: #cbd5e1; }
+      .bug-detail-bold { font-size: 13px; font-weight: 700; fill: #e2e8f0; }
+      .bug-detail-muted { font-size: 12px; fill: #64748b; }
+      .wiki-label { font-size: 12px; font-weight: 700; fill: #22d3ee; letter-spacing: 0.08em; }
+      .wiki-detail { font-size: 13px; fill: #e2e8f0; font-style: italic; }
+      .wiki-detail-bold { font-size: 13px; font-weight: 700; fill: #ffffff; }
+      .scope-tag { font-size: 11px; font-weight: 700; fill: #ffffff; letter-spacing: 0.08em; }
+      .footer { font-size: 11px; fill: #64748b; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="800" fill="url(#bg-grad)"/>
+
+  <text x="60" y="38" class="title">$ L1 / L2 &#8212; LLM failure modes the wiki addresses</text>
+  <text x="60" y="62" class="subtitle">// Code-quality vs business gap (L1) and attention-mechanism / context-window failures (L2). Every cell anchors to a real bug.</text>
+
+  <!-- ==================== L1 column ==================== -->
+  <rect x="60" y="100" width="500" height="600" fill="#1c1917" stroke="#f97316" stroke-width="2" rx="6"/>
+  <!-- header bar -->
+  <rect x="60" y="100" width="500" height="60" fill="#f97316" rx="6"/>
+  <rect x="60" y="150" width="500" height="10" fill="#f97316"/>
+  <text x="85" y="134" class="col-header">L1 &#8212; code quality vs business</text>
+  <text x="85" y="152" class="col-sub">Code-correct. Business-wrong.</text>
+
+  <text x="85" y="195" class="cell-label">CONCRETE ANCHOR</text>
+  <text x="85" y="222" class="bug-id">B074 &#183; adapter snapshot &#8800; business clear</text>
+
+  <rect x="85" y="240" width="450" height="140" fill="#0f172a" stroke="#f97316" stroke-width="1" rx="4"/>
+  <text x="100" y="265" class="bug-detail">LLM wrote a syntactically clean Electron IPC</text>
+  <text x="100" y="284" class="bug-detail">subscribe handler. All 47 tests passed.</text>
+  <text x="100" y="312" class="bug-detail">It missed that an empty initial snapshot means</text>
+  <text x="100" y="331" class="bug-detail-bold">"adapter not yet initialized", not "data cleared."</text>
+  <text x="100" y="359" class="bug-detail-muted">code-correct against generic Electron spec</text>
+  <text x="100" y="375" class="bug-detail-muted">business-wrong against NECallKit's local spec</text>
+
+  <text x="85" y="420" class="wiki-label">WIKI'S RESPONSE</text>
+  <rect x="85" y="438" width="450" height="180" fill="#0f172a" stroke="#3b82f6" stroke-width="1" rx="4"/>
+  <text x="100" y="465" class="wiki-detail">Compile project-specific business semantics</text>
+  <text x="100" y="484" class="wiki-detail">into wiki pages: domain conventions, lifecycle</text>
+  <text x="100" y="503" class="wiki-detail">invariants, threshold values, contract boundaries.</text>
+  <text x="100" y="535" class="wiki-detail">Future sessions read them back as a</text>
+  <text x="100" y="554" class="wiki-detail-bold">preflight before writing code</text>
+  <text x="100" y="573" class="wiki-detail">&#8212; the part that doesn't live in any code.</text>
+  <text x="100" y="601" class="bug-detail-muted">supporting: B066/B070/B074 mac IPC class</text>
+
+  <text x="85" y="650" class="cell-label">SOURCE</text>
+  <text x="85" y="670" class="footer">dogfood-necallkit-hn-essay.md:3237 (B074 line)</text>
+  <text x="85" y="686" class="footer">dogfood-necallkit-hn-essay.md:3231-3251 (cluster)</text>
+
+  <!-- ==================== L2 column ==================== -->
+  <rect x="620" y="100" width="520" height="600" fill="#0f172a" stroke="#3b82f6" stroke-width="2" rx="6"/>
+  <rect x="620" y="100" width="520" height="60" fill="#3b82f6" rx="6"/>
+  <rect x="620" y="150" width="520" height="10" fill="#3b82f6"/>
+  <text x="645" y="134" class="col-header">L2 &#8212; attention + context limits</text>
+  <text x="645" y="152" class="col-sub">Within-session bias. Across-session blindness. Boundary loss.</text>
+
+  <!-- ===== L2a: within-session (purple) ===== -->
+  <rect x="645" y="180" width="470" height="160" fill="#0f172a" stroke="#7c3aed" stroke-width="1.5" rx="5"/>
+  <rect x="645" y="180" width="120" height="22" fill="#7c3aed" rx="5"/>
+  <rect x="645" y="195" width="120" height="7" fill="#7c3aed"/>
+  <text x="655" y="196" class="scope-tag">WITHIN-SESSION</text>
+  <text x="660" y="226" class="bug-id">B074 anchor failure</text>
+  <text x="660" y="248" class="bug-detail">Wiki returned a prior at 0.86 confidence.</text>
+  <text x="660" y="267" class="bug-detail">Agent committed to the wrong hypothesis</text>
+  <text x="660" y="286" class="bug-detail">before reading the source.</text>
+  <text x="660" y="312" class="wiki-label" font-size="11">RESPONSE</text>
+  <text x="660" y="328" class="wiki-detail" font-size="12">knock-it-out v2 closure check: name the new</text>
+  <text x="660" y="344" class="wiki-detail" font-size="12">fact &#38; audit the anchor before exit.</text>
+
+  <!-- ===== L2b: across-session (green) ===== -->
+  <rect x="645" y="355" width="470" height="160" fill="#0f172a" stroke="#10b981" stroke-width="1.5" rx="5"/>
+  <rect x="645" y="355" width="135" height="22" fill="#10b981" rx="5"/>
+  <rect x="645" y="370" width="135" height="7" fill="#10b981"/>
+  <text x="655" y="371" class="scope-tag">ACROSS-SESSION</text>
+  <text x="660" y="401" class="bug-id">B066 + B070 + B074 mac IPC class</text>
+  <text x="660" y="423" class="bug-detail">3 separate sessions over 3 weeks. 3 separate</text>
+  <text x="660" y="442" class="bug-detail">fixes. <tspan font-weight="700" fill="#e2e8f0">No single session saw it as one class.</tspan></text>
+  <text x="660" y="461" class="bug-detail">The class lives across sessions; nowhere else.</text>
+  <text x="660" y="487" class="wiki-label" font-size="11">RESPONSE</text>
+  <text x="660" y="503" class="wiki-detail" font-size="12">Cross-link graph compounding surfaces the</text>
+  <text x="660" y="519" class="wiki-detail" font-size="12">class; the 4th instance is flagged before ship.</text>
+
+  <!-- ===== L2c: boundary (orange — matches V1 t3 highlight) ===== -->
+  <rect x="645" y="530" width="470" height="160" fill="#0f172a" stroke="#f97316" stroke-width="1.5" rx="5"/>
+  <rect x="645" y="530" width="100" height="22" fill="#f97316" rx="5"/>
+  <rect x="645" y="545" width="100" height="7" fill="#f97316"/>
+  <text x="655" y="546" class="scope-tag">BOUNDARY</text>
+  <text x="660" y="576" class="bug-id">B073 four-layer hardening</text>
+  <text x="660" y="598" class="bug-detail">User ratified a defense pattern mid-session.</text>
+  <text x="660" y="617" class="bug-detail">Bug doc captured the surface fix.</text>
+  <text x="660" y="636" class="bug-detail-bold">The hardening lived only in the transcript.</text>
+  <text x="660" y="662" class="wiki-label" font-size="11">RESPONSE</text>
+  <text x="660" y="678" class="wiki-detail" font-size="12">v1.11 wiki-session-ingest (PRD Draft v2) reads</text>
+  <text x="660" y="694" class="wiki-detail" font-size="12">jsonl; AI extracts; user multi-selects.</text>
+
+  <!-- bottom legend / footer -->
+  <line x1="60" y1="725" x2="1140" y2="725" stroke="#334155" stroke-width="1"/>
+
+  <text x="60" y="752" class="cell-label">READ THE TAXONOMY</text>
+  <text x="60" y="772" class="bug-detail" font-size="12">L1 is one cell (one failure axis). L2 has 3 sub-types &#8212; same attention/context family, three scopes.</text>
+  <text x="60" y="790" class="footer"># sources: dogfood-necallkit-hn-essay.md:3237, 3231-3251, 3300-3349, 3364-3411, 3448-3477 &#183; docs/PRD-v1.11-session-ingest.md &#183; V2 in essay-style-guide.md</text>
+
+</svg>

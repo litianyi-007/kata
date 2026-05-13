@@ -1,0 +1,31 @@
+{
+  "name": "kata",
+  "description": "Marketplace for Kata — a workflow + project memory layer for AI-paired engineering. Inherit a kata, adapt it, transcend the form.",
+  "owner": {
+    "name": "surebeli"
+  },
+  "plugins": [
+    {
+      "name": "kata",
+      "source": "./plugin",
+      "description": "A workflow + project memory layer for AI-paired engineering. Builders inherit a kata, adapt it to their project, transcend the form. Compiles business semantics (the part AI code-quality can't infer), manages spec authoring + disagreement. 13 skills (init, import, ingest, search, graph, tier, digest, query, lint, config, dream, watch, sync) on a Karpathy-style llm-wiki substrate; multi-machine git sync, multi-CLI session ingest (v1.11 in flight).",
+      "version": "2.0.0",
+      "homepage": "https://github.com/surebeli/kata",
+      "license": "MIT",
+      "keywords": [
+        "workflow",
+        "ai-paired-engineering",
+        "project-memory",
+        "builder",
+        "kata",
+        "wiki",
+        "knowledge-base",
+        "markdown",
+        "obsidian",
+        "multi-llm",
+        "multi-machine-sync",
+        "spec-management"
+      ]
+    }
+  ]
+}

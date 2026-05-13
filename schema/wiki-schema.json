@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/litianyi/kata/blob/main/schema/wiki-schema.json",
+  "title": "kata SCHEMA.md config blocks",
+  "description": "Validates the YAML config blocks embedded in a wiki's SCHEMA.md (memory_tiers, custom_dimensions, frontmatter, tag_taxonomy, policies). Skills should validate SCHEMA.md against this before acting.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "wiki_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Stable UUIDv4 for cross-machine identity check by wiki-sync. Generated once by wiki-init; should not be edited by hand. Format-validated only — sync runtime enforces immutability via SCHEMA.md fetch comparison (PRD-v1.8-sync.md §11.9)."
+    },
+    "domain": { "type": "string", "minLength": 1 },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+          "purpose": { "type": "string" }
+        }
+      }
+    },
+    "frontmatter_fields": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tag_taxonomy": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9:_-]*$" },
+      "uniqueItems": true
+    },
+    "memory_tiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "active_days": { "type": "integer", "minimum": 1, "default": 365 },
+        "archived_days": { "type": "integer", "minimum": 1, "default": 730 },
+        "driving_field": {
+          "type": "string",
+          "enum": ["published_at", "ingested_at", "created", "updated"],
+          "default": "published_at"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["active_days", "archived_days"] },
+          "then": {
+            "properties": {
+              "archived_days": { "type": "integer" }
+            }
+          }
+        }
+      ]
+    },
+    "custom_dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z_][a-z0-9_]*$" },
+          "type": {
+            "type": "string",
+            "enum": ["string", "date", "number", "enum", "list", "bool"]
+          },
+          "description": { "type": "string", "minLength": 1 },
+          "required": { "type": "boolean", "default": false },
+          "default": {},
+          "enum_values": { "type": "array", "items": { "type": "string" } },
+          "refresh_on": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["ingest", "import", "digest", "manual"]
+            },
+            "default": ["ingest"]
+          },
+          "applies_to": {
+            "anyOf": [
+              { "type": "null" },
+              { "type": "array", "items": { "type": "string" } }
+            ]
+          }
+        },
+        "if": { "properties": { "type": { "const": "enum" } } },
+        "then": { "required": ["enum_values"] }
+      }
+    },
+    "page_creation_policy": { "type": "string" },
+    "cross_reference_policy": { "type": "string" },
+    "page_size_limit": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "integer", "minimum": 1 },
+        { "type": "string", "pattern": "^(no limit|none|unlimited)$" }
+      ]
+    },
+    "log_rotation": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "integer", "minimum": 100 },
+        { "type": "string" }
+      ]
+    },
+    "external_plugins": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/external_plugin" }
+    },
+    "sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Multi-machine git sync configuration. See PRD-v1.8-sync.md §12.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "remote": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "default": "origin"
+        },
+        "branch": {
+          "type": "string",
+          "pattern": "^[a-z0-9._/-]+$",
+          "default": "main"
+        },
+        "on_conflict": {
+          "type": "string",
+          "enum": ["report-and-exit", "force-resolve-ours", "force-resolve-theirs"],
+          "default": "report-and-exit"
+        },
+        "auto_chain_dream": { "type": "boolean", "default": false },
+        "auto_configure_drivers": { "type": "boolean", "default": true }
+      }
+    },
+    "dreaming": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "strategy": {
+          "type": "string",
+          "enum": ["co-occurrence"],
+          "default": "co-occurrence"
+        },
+        "cadence": {
+          "type": "string",
+          "enum": ["weekly", "daily", "manual"],
+          "default": "weekly"
+        },
+        "max_repromote_per_run": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10
+        },
+        "confidence_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.6
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entity":   { "type": "number", "minimum": 0, "default": 0.5 },
+            "tag":      { "type": "number", "minimum": 0, "default": 0.2 },
+            "citation": { "type": "number", "minimum": 0, "default": 0.4 }
+          }
+        },
+        "resurgence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dormancy_window_days": { "type": "integer", "minimum": 1, "default": 180 },
+            "min_count":            { "type": "integer", "minimum": 1, "default": 3 }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "external_plugin": {
+      "type": "object",
+      "required": ["name", "argv"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "description": { "type": "string" },
+        "enabled": { "type": "boolean", "default": true },
+        "priority": { "type": "integer", "minimum": 0, "default": 10 },
+        "auto_run": { "type": "boolean", "default": false },
+        "trigger": {
+          "type": "string",
+          "enum": ["on_empty", "on_low_confidence", "on_request"],
+          "default": "on_empty"
+        },
+        "min_local_hits": { "type": "integer", "minimum": 0, "default": 2 },
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Argv list. Each element is one literal token; substitution is per-token via {query}, {wiki_path}, {date}, or vars keys. Tokens are NEVER interpreted by a shell — execve-only. Forbidden tokens: ';', '|', '&', '&&', '||', '`', '$(...)'."
+        },
+        "vars": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "output_dir": { "type": "string" },
+        "auto_tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "max_output_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "default": 1048576
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 60
+        }
+      }
+    }
+  }
+}

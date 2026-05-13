@@ -1,0 +1,57 @@
+# Compliance blocklist — patterns that must NEVER enter staged content.
+#
+# Each non-comment line is an extended POSIX regex (ERE). Empty lines and
+# lines starting with `#` are ignored.
+#
+# The .githooks/pre-commit hook scans the staged diff (added lines only)
+# against every pattern here. If any pattern matches, the commit is rejected
+# with a clear error.
+#
+# To override for a single commit (use sparingly):
+#     git commit --no-verify ...
+#
+# To update this list, add/edit patterns below. Patterns are case-sensitive.
+# New patterns take effect on the next commit immediately.
+#
+# Design principle: this list is for TRULY SENSITIVE content (corp-internal,
+# personal info, secrets) that should never reach a public commit. Brand /
+# style regressions (e.g. old project names) are NOT blocked here — those are
+# a quality issue, not a compliance issue, and would create false positives
+# in legitimate places (migration scripts, CHANGELOG history entries).
+
+# --- Internal corporate git host / paths ---
+g\.hz\.netease\.com
+nim-pc/california
+ai-goods/necall-agent
+
+# --- Internal ticket / issue IDs ---
+OMNRTCG2-[0-9]+
+HIH-D-[0-9]+
+
+# --- Corp email domains ---
+@corp\.netease\.com
+@[A-Za-z0-9.-]+\.netease\.com
+
+# --- Author personal info (litianyi = local Windows username,
+#                          surebeli = public GitHub handle — keep public,
+#                          litianyi is private) ---
+C:\\Users\\litianyi\\
+C:/Users/litianyi/
+/c/Users/litianyi/
+/Users/litianyi/
+/home/litianyi/
+
+# --- Local working-directory absolute paths (force relative-path discipline) ---
+F:\\workspace\\ai\\
+F:/workspace/ai/
+/f/workspace/ai/
+
+# --- Secret-shaped patterns (catch accidental copy-paste) ---
+sk-[A-Za-z0-9]{32,}
+ghp_[A-Za-z0-9]{36}
+github_pat_[A-Za-z0-9_]{60,}
+AKIA[A-Z0-9]{16}
+xoxb-[0-9]+-[0-9]+-[A-Za-z0-9]+
+-----BEGIN [A-Z ]+PRIVATE KEY-----
+
+# --- Add new patterns below as you discover them ---

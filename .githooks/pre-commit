@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# kata pre-commit hook — run smoke tests + drift check on every commit.
+#
+# Enable once per clone:
+#     git config --local core.hooksPath .githooks
+#
+# Disable temporarily:
+#     git commit --no-verify ...
+#
+# Skip if no Python on this machine.
+set -e
+
+if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+    echo "[pre-commit] Python not found — skipping kata checks" >&2
+    exit 0
+fi
+
+PYTHON="$(command -v python3 || command -v python)"
+
+# Only run if any of the relevant paths changed in this commit.
+RELEVANT_PATHS='^(plugin/scripts/|plugin/skills/|schema/|tests/|scripts/|SKILL\.md$|CHANGELOG\.md$)'
+if ! git diff --cached --name-only | grep -qE "$RELEVANT_PATHS"; then
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# ============================================================
+# Stage 0 — Compliance blocklist scan
+# Rejects the commit if any staged content matches a blocklist
+# pattern. Runs FIRST so we fail fast and never run expensive
+# checks on a commit that's going to be rejected anyway.
+# Bypass with: git commit --no-verify (use sparingly)
+# ============================================================
+BLOCKLIST=".compliance-blocklist.txt"
+if [ -f "$BLOCKLIST" ]; then
+    echo "[pre-commit] compliance scan…"
+    # --no-renames: rename pairs show as add+delete so we catch the +added side.
+    # Exclude the blocklist file itself (it contains the patterns by definition).
+    # -U0: only changed lines, no context. grep '^\+' but not '^\+\+\+' (file header).
+    diff_added=$(git diff --cached --no-color --no-renames -U0 \
+        -- . ":(exclude)$BLOCKLIST" \
+        | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+
+    if [ -n "$diff_added" ]; then
+        violations=""
+        while IFS= read -r line; do
+            # Strip inline comments and trim whitespace
+            pattern=$(printf '%s' "$line" | sed -E 's/[[:space:]]*#.*$//' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')
+            [ -z "$pattern" ] && continue
+
+            hit=$(printf '%s\n' "$diff_added" | grep -E -e "$pattern" || true)
+            if [ -n "$hit" ]; then
+                sample=$(printf '%s\n' "$hit" | head -1 | cut -c1-120)
+                violations="$violations
+    [pattern] $pattern
+    [match]   $sample
+"
+            fi
+        done < "$BLOCKLIST"
+
+        if [ -n "$violations" ]; then
+            echo >&2
+            echo "[pre-commit] BLOCKED — compliance violations in staged content:" >&2
+            printf '%s\n' "$violations" >&2
+            echo "[pre-commit] If this is a false positive, edit $BLOCKLIST." >&2
+            echo "[pre-commit] If genuinely intentional, override once with: git commit --no-verify" >&2
+            exit 1
+        fi
+    fi
+    echo "[pre-commit] compliance OK."
+fi
+
+echo "[pre-commit] checking SKILL.md drift…"
+"$PYTHON" scripts/build_skill_md.py --check || {
+    echo "[pre-commit] SKILL.md drift detected. Run: python scripts/build_skill_md.py" >&2
+    exit 1
+}
+
+echo "[pre-commit] running smoke tests…"
+"$PYTHON" tests/run_smoke.py || {
+    echo "[pre-commit] smoke tests failed. Fix or commit with --no-verify." >&2
+    exit 1
+}
+
+echo "[pre-commit] all checks passed."

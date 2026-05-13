@@ -1,0 +1,68 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "**.md"
+      - "schema/**"
+      - "plugin/scripts/**"
+      - "plugin/skills/**"
+      - "tests/**"
+      - ".github/workflows/test.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "**.md"
+      - "schema/**"
+      - "plugin/scripts/**"
+      - "plugin/skills/**"
+      - "tests/**"
+      - ".github/workflows/test.yml"
+
+jobs:
+  smoke:
+    name: smoke (py${{ matrix.python }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Show Python version
+        run: python --version
+
+      - name: Run smoke tests
+        run: python tests/run_smoke.py
+
+      - name: Check SKILL.md is in sync with plugin/skills/
+        run: python scripts/build_skill_md.py --check
+
+      - name: Dreaming benchmark — market research
+        run: python tests/run_dreaming_eval.py --fixture market_research --gate
+
+  schema-check:
+    name: schema integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: JSON Schema is valid JSON
+        run: python -c "import json; json.load(open('schema/wiki-schema.json'))"
+      - name: All scripts compile
+        run: |
+          python -m compileall -q plugin/scripts/
+          python -m compileall -q tests/

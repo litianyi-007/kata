@@ -1,0 +1,69 @@
+{
+  "fixture_today": "2026-04-25",
+  "watermark": "2026-04-21",
+  "comment": "Ground truth for the market-research dreaming benchmark. Each 'should_repromote' entry names a page in the archived/frozen pool that the planted recent ingests (see log.md after watermark) should pull back. min_score is the lowest acceptable score the algorithm should produce for that page; reason_must_include lists tokens that must appear in the dreamer's stated reasons (loose substring match, lowercase).",
+  "should_repromote": [
+    {
+      "page": "companies/mosaic.md",
+      "min_score": 0.55,
+      "reason_must_include": ["mosaic"]
+    },
+    {
+      "page": "models/mpt-7b.md",
+      "min_score": 0.55,
+      "reason_must_include": ["mpt-7b"]
+    },
+    {
+      "page": "models/mpt-30b.md",
+      "min_score": 0.55,
+      "reason_must_include": ["mpt-30b"]
+    },
+    {
+      "page": "models/switch-transformer.md",
+      "min_score": 0.55,
+      "reason_must_include": ["switch-transformer"]
+    },
+    {
+      "page": "models/glam.md",
+      "min_score": 0.55,
+      "reason_must_include": ["glam"]
+    },
+    {
+      "page": "papers/moe-foundational-paper.md",
+      "min_score": 0.55,
+      "reason_must_include": ["moe-foundational-paper"]
+    },
+    {
+      "page": "trends/moe-architecture.md",
+      "min_score": 0.55,
+      "reason_must_include": ["moe-architecture"]
+    },
+    {
+      "page": "trends/multimodal.md",
+      "min_score": 0.55,
+      "reason_must_include": ["multimodal"]
+    },
+    {
+      "page": "papers/mpt-paper.md",
+      "min_score": 0.55,
+      "reason_must_include": ["mpt-paper"]
+    }
+  ],
+  "should_stay_frozen": [
+    "companies/ada-company.md",
+    "models/bloom.md",
+    "models/gpt-3-5.md",
+    "models/gpt-2.md",
+    "models/bert.md",
+    "models/t5.md",
+    "models/universal-transformer-model.md",
+    "papers/attention-is-all-you-need.md",
+    "papers/gpt-3-paper.md",
+    "papers/transformers-tutorial.md",
+    "papers/universal-transformer-paper.md",
+    "events/bing-ai-launch.md",
+    "events/llama-leak.md",
+    "events/chatgpt-launch.md",
+    "events/google-bard-launch.md"
+  ]
+}

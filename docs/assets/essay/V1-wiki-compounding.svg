@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="'SF Mono', 'Fira Code', 'Cascadia Code', 'Microsoft YaHei', monospace">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f0f1a"/>
+      <stop offset="100%" stop-color="#1a1a2e"/>
+    </linearGradient>
+    <style>
+      .title { font-size: 22px; font-weight: 700; fill: #e2e8f0; letter-spacing: 0.02em; }
+      .subtitle { font-size: 14px; fill: #94a3b8; letter-spacing: 0.02em; }
+      .axis-label { font-size: 13px; fill: #94a3b8; letter-spacing: 0.04em; }
+      .tick-label { font-size: 12px; fill: #94a3b8; }
+      .event-label { font-size: 13px; font-weight: 700; fill: #e2e8f0; letter-spacing: 0.04em; }
+      .value-label { font-size: 13px; font-weight: 700; fill: #22d3ee; }
+      .secondary-label { font-size: 11px; fill: #64748b; }
+      .callout-text { font-size: 12px; fill: #cbd5e1; }
+      .callout-accent { font-size: 13px; font-weight: 700; fill: #fb923c; }
+      .legend-text { font-size: 13px; fill: #cbd5e1; }
+      .legend-token { font-size: 13px; font-weight: 700; fill: #22d3ee; }
+      .footer { font-size: 11px; fill: #64748b; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="760" fill="url(#bg-grad)"/>
+
+  <text x="60" y="38" class="title">$ wiki compounding &#8212; edges grow fastest when synthesis is filed back</text>
+  <text x="60" y="62" class="subtitle">// NECallKit dogfood &#8212; 2026-05-07 to 2026-05-08 &#8212; kata edges vs imports</text>
+
+  <rect x="120" y="100" width="960" height="440" fill="#0f172a" stroke="#334155" stroke-width="1" rx="6"/>
+
+  <line x1="120" y1="540" x2="1080" y2="540" stroke="#334155" stroke-width="1"/>
+  <line x1="120" y1="477" x2="1080" y2="477" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="120" y1="414" x2="1080" y2="414" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="120" y1="351" x2="1080" y2="351" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="120" y1="289" x2="1080" y2="289" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="120" y1="226" x2="1080" y2="226" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="120" y1="163" x2="1080" y2="163" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="3,3"/>
+  <line x1="120" y1="100" x2="1080" y2="100" stroke="#1e293b" stroke-width="0.5" stroke-dasharray="3,3"/>
+
+  <text x="110" y="544" text-anchor="end" class="tick-label">0</text>
+  <text x="110" y="481" text-anchor="end" class="tick-label">20</text>
+  <text x="110" y="418" text-anchor="end" class="tick-label">40</text>
+  <text x="110" y="355" text-anchor="end" class="tick-label">60</text>
+  <text x="110" y="293" text-anchor="end" class="tick-label">80</text>
+  <text x="110" y="230" text-anchor="end" class="tick-label">100</text>
+  <text x="110" y="167" text-anchor="end" class="tick-label">120</text>
+  <text x="110" y="104" text-anchor="end" class="tick-label">140</text>
+  <text x="40" y="320" text-anchor="middle" class="axis-label" transform="rotate(-90, 40, 320)">edges</text>
+
+  <path d="M 120,540 L 360,458 L 600,326 L 840,273 L 1080,119" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <circle cx="120" cy="540" r="6" fill="#0f172a" stroke="#22d3ee" stroke-width="2.5"/>
+  <circle cx="360" cy="458" r="6" fill="#0f172a" stroke="#22d3ee" stroke-width="2.5"/>
+  <circle cx="600" cy="326" r="6" fill="#0f172a" stroke="#22d3ee" stroke-width="2.5"/>
+  <circle cx="840" cy="273" r="8" fill="#fb923c" stroke="#fb923c" stroke-width="2.5"/>
+  <circle cx="1080" cy="119" r="6" fill="#0f172a" stroke="#22d3ee" stroke-width="2.5"/>
+
+  <text x="120" y="528" text-anchor="middle" class="value-label">0</text>
+  <text x="360" y="448" text-anchor="middle" class="value-label">26</text>
+  <text x="600" y="316" text-anchor="middle" class="value-label">68</text>
+  <text x="840" y="260" text-anchor="middle" class="callout-accent">85</text>
+  <text x="1060" y="111" text-anchor="end" class="value-label">134</text>
+
+  <text x="140" y="555" class="secondary-label">pages=56</text>
+  <text x="380" y="473" class="secondary-label">pages=61</text>
+  <text x="620" y="341" class="secondary-label">pages=69</text>
+  <text x="860" y="290" class="secondary-label">pages=70</text>
+  <text x="1075" y="138" text-anchor="end" class="secondary-label">pages=77</text>
+
+  <line x1="120" y1="540" x2="120" y2="546" stroke="#64748b" stroke-width="1"/>
+  <line x1="360" y1="540" x2="360" y2="546" stroke="#64748b" stroke-width="1"/>
+  <line x1="600" y1="540" x2="600" y2="546" stroke="#64748b" stroke-width="1"/>
+  <line x1="840" y1="540" x2="840" y2="546" stroke="#64748b" stroke-width="1"/>
+  <line x1="1080" y1="540" x2="1080" y2="546" stroke="#64748b" stroke-width="1"/>
+
+  <text x="120" y="585" text-anchor="middle" class="event-label">t0</text>
+  <text x="360" y="585" text-anchor="middle" class="event-label">t1</text>
+  <text x="600" y="585" text-anchor="middle" class="event-label">t2</text>
+  <text x="840" y="585" text-anchor="middle" class="event-label" fill="#fb923c">t3</text>
+  <text x="1080" y="585" text-anchor="middle" class="event-label">t4</text>
+
+  <rect x="170" y="491" width="170" height="22" rx="3" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="255" y="506" text-anchor="middle" class="callout-text">+26 edges (+5 pages)</text>
+  <rect x="410" y="378" width="170" height="22" rx="3" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="495" y="393" text-anchor="middle" class="callout-text">+42 edges (+8 pages)</text>
+  <rect x="660" y="220" width="200" height="44" rx="5" fill="#1c1917" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="760" y="240" text-anchor="middle" class="callout-accent">+17 edges from 1 page</text>
+  <text x="760" y="256" text-anchor="middle" class="callout-text">synthesis bonus</text>
+  <line x1="785" y1="264" x2="840" y2="264" stroke="#fb923c" stroke-width="1.5" stroke-dasharray="2,2"/>
+  <rect x="900" y="182" width="170" height="22" rx="3" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="985" y="197" text-anchor="middle" class="callout-text">+49 edges (+7 pages)</text>
+
+  <text x="60" y="630" class="event-label" letter-spacing="0.08em">EVENTS</text>
+  <text x="60" y="652" class="legend-token">t0</text>
+  <text x="100" y="652" class="legend-text">&#8212; Feature dossier imported (56 pages, 0 edges &#8212; the import baseline)</text>
+  <text x="60" y="672" class="legend-token">t1</text>
+  <text x="100" y="672" class="legend-text">&#8212; Two maintainer-decision queries filed (61 pages, 26 edges)</text>
+  <text x="60" y="692" class="legend-token">t2</text>
+  <text x="100" y="692" class="legend-text">&#8212; Project operating context imported (69 pages, 68 edges)</text>
+  <text x="60" y="712" class="legend-token" fill="#fb923c">t3</text>
+  <text x="100" y="712" class="legend-text">&#8212; Operating-boundary query filed &#8212; <tspan font-weight="700" fill="#fb923c">1 page, +17 edges</tspan> (70 pages, 85 edges)</text>
+  <text x="60" y="732" class="legend-token">t4</text>
+  <text x="100" y="732" class="legend-text">&#8212; Lessons seed (6 pages) + preflight query (1 page) (77 pages, 134 edges)</text>
+
+  <text x="60" y="752" class="footer"># source: docs/dogfood-necallkit-hn-brief.md:40-47 &#183; kata dogfood log &#183; V1 in essay-style-guide.md</text>
+
+</svg>
