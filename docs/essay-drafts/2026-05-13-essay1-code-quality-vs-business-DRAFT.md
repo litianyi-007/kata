@@ -10,11 +10,13 @@
 
 # Code quality is solved. Business thresholds aren't.
 
-On 2026-05-09 at around 16:32, Claude finished what looked like a clean Electron IPC patch. All 47 tests passed. The mac camera still didn't switch.
+On 2026-05-09 at 16:32, Claude finished what looked like a clean Electron IPC patch. All 47 tests passed.
+
+The mac camera still didn't switch.
 
 The handler was syntactically correct: a `subscribe` callback that, on receiving an empty snapshot, cleared the call-record cache. The bug wasn't in the code. It was in the *meaning* of an empty snapshot. NECallKit's adapter emits an empty snapshot during its own init phase — **before any business clear has happened**. "Adapter not yet initialized" and "data cleared" look identical from the renderer; only the team's local spec distinguishes them.
 
-This wasn't a bug a better LLM would have caught. The code was correct against the spec the LLM had — wrong against the spec only NECallKit's team carried. (Logged as B074 in the dogfood corpus: `dogfood-necallkit-hn-essay.md:3237`.)
+This wasn't a bug a better LLM would have caught. The code was correct against the spec the LLM had — wrong against the spec only NECallKit's team carried. (Logged as B074 in the dogfood corpus — a project log I keep alongside the code; raw entry at `dogfood-necallkit-hn-essay.md:3237`. Throughout this piece I use internal bug IDs as citation anchors; each is explained where it appears.)
 
 ## Why this matters
 
@@ -28,7 +30,9 @@ Call this **L1: code-correct, business-wrong**. It's a systematic failure mode o
 
 NECallKit is a real Electron + native video-calling SDK — multi-platform, native IPC bridges, mac/win/linux, Java + JS + C++ side by side. Not a toy fixture. Over four weeks (2026-04-25 → 2026-05-13) I ran a paired experiment: route every bug, decision, and filed query for the project through an AI-maintained wiki, and measure what compounds.
 
-The wiki tool is **Kata** (v1.4 → v1.11 over six weeks), built on Karpathy's LLM-Wiki principle. The loop is simple: human curates sources, AI agents read them, summarize, cross-link, file. Pages compile down — synthesis baked in, contradictions flagged, queries filed back as new pages. The wiki is not retrieval; it's **compiled knowledge** that stays current as the project moves. Claude Code and Codex CLI took turns as the maintaining agent across 200+ sessions; I curated.
+The wiki tool is **Kata** (v1.4 → v1.11 over six weeks), built on Karpathy's LLM-Wiki principle.
+
+The loop is simple. Human curates sources. AI agents read them, summarize, cross-link, file. Pages compile down — synthesis baked in, contradictions flagged, queries filed back as new pages. Not retrieval; **compiled knowledge** that stays current as the project moves. Across four weeks, agents logged 160+ hours of session time across Claude Code and Codex CLI; I spent roughly 15 hours hands-on curating. Roughly **1 hour human for every 11 hours agent**.
 
 The hypothesis I started with was modest. The wiki would help with cross-referencing — the LLM already knew Electron and Node and the standard web. Maybe it would speed up onboarding for the second machine I set up halfway through.
 
@@ -44,13 +48,13 @@ B074 wasn't a one-off. Over three weeks I shipped three bugs with the same shape
 
 (Source for the cluster: `dogfood-necallkit-hn-essay.md:3231-3251`.)
 
-![L1 / L2 failure taxonomy](../assets/essay/V2-l1-l2-failure-taxonomy.svg)
+Every one of B066/B070/B074 was **code-correct against the generic Electron spec the LLM had, business-wrong against the local NECallKit spec only the team carried**. Three different sessions, three different agents, three weeks apart. **No single session saw it as one class.** The class was structurally invisible to chat-bound intelligence — every bug fix is local; pattern detection requires standing outside the conversation. Each session left the codebase strictly better and the class fully invisible.
+
+![L1 / L2 failure taxonomy — the bugs make the shape visible](../assets/essay/V2-l1-l2-failure-taxonomy.svg)
 
 L1 (left column) is the family I'm naming in this essay. L2 (right column — within-session attention bias, across-session pattern blindness, session-boundary loss) is a separate essay; ignore it for now.
 
-Every one of B066/B070/B074 was **code-correct against the generic Electron spec the LLM had, business-wrong against the local NECallKit spec only the team carried**. Three different sessions, three different agents, three weeks apart. **No single session saw it as one class.** The class was structurally invisible to chat-bound intelligence — every bug fix is local; pattern detection requires standing outside the conversation. Each session left the codebase strictly better and the class fully invisible.
-
-That standing-outside is where the wiki goes. The wiki is not retrieval-on-demand; it's the artifact that exists between sessions, that the next agent reads before it writes a line.
+That standing-outside is where the wiki goes. The wiki is not retrieval-on-demand; it's the artifact that exists between sessions, that the next agent reads before it writes a line. Retrieval re-asks the question every session. Compiled knowledge is what you wrote down so you don't have to.
 
 ## How the wiki compiles the gap
 
@@ -66,7 +70,7 @@ I measured one number across the dogfood: graph edge count in the compiled wiki 
 
 (Source: `dogfood-necallkit-hn-brief.md:40-47`.)
 
-![Edge progression — synthesis vs import](../assets/essay/V1-wiki-compounding.svg)
+![t3 — one filed query, +17 edges. Imports averaged 5 edges per page.](../assets/essay/V1-wiki-compounding.svg)
 
 t3 is the punchline. **One filed query. One new page. +17 edges.** Imports give you about 5 edges per page on average. A filed maintainer-decision query gives you 17. The wiki doesn't grow when you load it; it grows when someone asks a maintainer-decision question and the answer goes back in *with cross-links to the existing pages it touches*.
 
@@ -80,29 +84,29 @@ Halfway through the dogfood I wrote a sentence in the log that turned into this 
 
 (`dogfood-necallkit-hn-essay.md:2526-2527`.) That's what the +17-from-one-page moment is. The wiki is not reference. It's **business-semantic compilation**.
 
-## The lesson
+## Name it
 
 Three words, quotable: **code-correct, business-wrong**.
 
-Generalized: AI tools are very good at **spec-shaped** knowledge — the kind typed into the language, the framework, the public API documentation, the standard library, the conventions GitHub has already chewed on for a decade. The model knows what `subscribe` looks like in JavaScript; it knows what an Electron renderer can and can't reach; it knows what a `null` reference does. That part is solved, and it's going to get more solved.
-
-What the model doesn't know is the **spec-unshaped** part. The local truths. The mac vs main process partition for *your* SDK. The protocol field that means three different things at three lifecycle phases. The 3.5-second timeout your previous engineer settled on after a customer outage. None of that is in the language. None of it is in the framework. It lives in three engineers' heads and gets re-derived every time someone new asks the wrong question first.
+The failure mode AI tools cannot fix from inside the code — the missing spec isn't in the language, the framework, or any public API. It's in your team's head.
 
 The economic prediction is uncomfortable but straightforward: as code-quality work keeps falling into AI, senior engineers' durable contribution shifts from *writing code* to *compiling the business spec*. The work goes from "produce the artifact" to "produce the rule the artifact must obey." The wiki is one form of that compilation. There will be others — schema repositories, contract-test suites, decision logs, machine-readable invariant declarations. Pick one. Or invent one.
 
-This isn't a story about AI being weak. AI is strong exactly where the spec is written down. The bug is that we never wrote down the part that wasn't a language feature, because for fifteen years there was no urgency to. Now there is.
+AI is strong exactly where the spec is written down. The bug is that we never wrote down the part that wasn't a language feature, because for fifteen years there was no urgency to. Now there is.
 
-The ladder up is to pick a kata for compiling business semantics — adopt one, adapt it to your project, then transcend the form. Kata (the workflow described in this essay) is one such ladder; your project's may look different. The point isn't the wiki. The point is having *any* compiled business-spec layer at all.
+The point isn't the wiki. The point is having *any* compiled business-spec layer at all.
+
+> *(Isn't this just a runbook? A Confluence doc? A glorified FAQ?* — The difference is the compilation. A runbook is a sequence; this is a graph. A Confluence doc is a destination; this is a hub other pages link into. A FAQ answers; this rewrites itself when the answer changes. Filed queries leave cross-links the next session reads before it touches code. That's the part runbooks don't do.)
 
 ## What's next
 
-**Open gap.** I haven't run the cold-baseline comparison — same question, same agent, no wiki. I think compounding is the right framing, but I owe the test before I call it proven. The slot is flagged in the dogfood log (`dogfood-necallkit-hn-essay.md:996-999`); next experiment.
+**Open gap.** I haven't run the cold-baseline comparison — same question, same agent, no wiki. The numbers above describe the *shape* of compounding, not its *magnitude* vs no-wiki. Magnitude is the next experiment. The slot is flagged in the dogfood log (`dogfood-necallkit-hn-essay.md:996-999`).
 
-**Scope note.** This essay is Kata's **Phase 1 reach** — AI-paired engineering. Kata's core is a self-evolving wiki with auto-dreaming on Karpathy's substrate; Phase 1 applies the core to project memory. **Phase 2** — team spec authoring + dispute resolution as a self-closing loop — is designed, not yet implemented. The compounding thesis here generalizes; the specific moves don't.
+**Scope.** This essay is about one use case — project memory. Kata has a broader design (auto-dreaming, team spec authoring) but those don't matter to the thesis here; they're in the repo if you want to dig.
 
-**Next experiment.** v1.11 `wiki-session-ingest` (PRD Draft v2: `docs/PRD-v1.11-session-ingest.md`) — a skill that reads the current CLI session, extracts knowledge points, lets the user multi-select which to file. It's the structural answer to a different failure mode (L2 — knowledge born in conversation, dying at session boundary) that the next essay will cover.
+**Next experiment.** v1.11 `wiki-session-ingest` (PRD Draft v2: `docs/PRD-v1.11-session-ingest.md`) — a skill that reads the current CLI session, extracts knowledge points, lets the user multi-select which to file. It's the structural answer to a different failure mode (knowledge born in conversation, dying at session boundary) — the next essay's subject.
 
-You don't need to use Kata to do this. Pick a kata for your team — fork ours, write your own, or adopt a different one entirely. The point isn't the tool; it's the layer.
+You don't need to use Kata to do this. Pick any compiled business-spec layer for your team — fork mine, write your own, or build something completely different.
 
 ---
 
@@ -116,4 +120,4 @@ You don't need to use Kata to do this. Pick a kata for your team — fork ours, 
 
 ---
 
-*— a build log entry from an AI-native dev exploring the frontier. Accept what works. Adapt what fits. Transcend the form.*
+*— build log, 2026-05-13. Next slot: cold-baseline run.*
