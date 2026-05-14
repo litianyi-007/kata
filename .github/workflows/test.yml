@@ -51,18 +51,13 @@ jobs:
       - name: Show Python version
         run: python --version
 
-      - name: Diagnostic — show runtime env (temp probe for Windows CI debug)
-        if: runner.os == 'Windows'
-        run: |
-          python -c "import sys, locale, os; print('utf8_mode=', sys.flags.utf8_mode); print('defaultenc=', sys.getdefaultencoding()); print('stdout.enc=', sys.stdout.encoding); print('fs.enc=', sys.getfilesystemencoding()); print('locale.getencoding=', locale.getencoding()); print('PYTHONUTF8=', os.environ.get('PYTHONUTF8', '<unset>')); print('PYTHONIOENCODING=', os.environ.get('PYTHONIOENCODING', '<unset>')); print('LANG=', os.environ.get('LANG', '<unset>')); print('LC_ALL=', os.environ.get('LC_ALL', '<unset>'))"
-
       - name: Run smoke tests (with stdout capture for failure analysis)
         id: smoke
         shell: bash
         run: |
           # Tee stdout+stderr so the full log is both visible in CI UI
           # AND saved as a file we can upload as an artifact for anonymous
-          # API access.
+          # API access on failure.
           set -o pipefail
           python tests/run_smoke.py 2>&1 | tee smoke-output.log
 
