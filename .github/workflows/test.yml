@@ -51,8 +51,29 @@ jobs:
       - name: Show Python version
         run: python --version
 
-      - name: Run smoke tests
-        run: python tests/run_smoke.py
+      - name: Diagnostic — show runtime env (temp probe for Windows CI debug)
+        if: runner.os == 'Windows'
+        run: |
+          python -c "import sys, locale, os; print('utf8_mode=', sys.flags.utf8_mode); print('defaultenc=', sys.getdefaultencoding()); print('stdout.enc=', sys.stdout.encoding); print('fs.enc=', sys.getfilesystemencoding()); print('locale.getencoding=', locale.getencoding()); print('PYTHONUTF8=', os.environ.get('PYTHONUTF8', '<unset>')); print('PYTHONIOENCODING=', os.environ.get('PYTHONIOENCODING', '<unset>')); print('LANG=', os.environ.get('LANG', '<unset>')); print('LC_ALL=', os.environ.get('LC_ALL', '<unset>'))"
+
+      - name: Run smoke tests (with stdout capture for failure analysis)
+        id: smoke
+        shell: bash
+        run: |
+          # Tee stdout+stderr so the full log is both visible in CI UI
+          # AND saved as a file we can upload as an artifact for anonymous
+          # API access.
+          set -o pipefail
+          python tests/run_smoke.py 2>&1 | tee smoke-output.log
+
+      - name: Upload smoke log on failure (so we can fetch via API)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-log-${{ matrix.os }}-py${{ matrix.python }}
+          path: smoke-output.log
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Check SKILL.md is in sync with plugin/skills/
         run: python scripts/build_skill_md.py --check
