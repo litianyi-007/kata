@@ -21,6 +21,48 @@ for _stream in (sys.stdout, sys.stderr):
         # GitHub's Windows runner may default to cp1252; test logs contain UTF-8.
         _stream.reconfigure(encoding="utf-8")
 
+# Monkey-patch subprocess.run module-wide so every test that spawns a child
+# Python script gets:
+#   - UTF-8 decoding of the captured stdout/stderr (parent side)
+#   - PYTHONIOENCODING=utf-8 in the child's env (child side)
+#
+# Without this, on GitHub Actions windows-latest (locale=cp1252), any child
+# script that prints a non-ASCII char via `print(json.dumps(..., ensure_ascii=False))`
+# can either crash the parent's reader thread (UnicodeDecodeError, result.stdout
+# becomes None) or write replacement chars the parent then can't round-trip.
+#
+# This patch is belt-and-suspenders to the workflow's PYTHONUTF8=1 env var.
+# If the workflow setting doesn't reach Python for any reason (env var
+# stripping, action quirks), this patch still makes every subprocess.run
+# call work correctly.
+_orig_subprocess_run = subprocess.run
+
+
+def _utf8_subprocess_run(*args, **kwargs):
+    """Wrap subprocess.run to force UTF-8 on text-mode captures."""
+    text_mode = (
+        kwargs.get("text")
+        or kwargs.get("universal_newlines")
+        or kwargs.get("encoding")
+    )
+    if text_mode:
+        # Force explicit UTF-8 decoding on the parent side.
+        kwargs.setdefault("encoding", "utf-8")
+        # Force PYTHONIOENCODING=utf-8 in the child env. Caller may pass
+        # env=None (inherit) or env=dict (override) — handle both.
+        caller_env = kwargs.get("env")
+        if caller_env is None:
+            new_env = dict(os.environ)
+        else:
+            new_env = dict(caller_env)
+        # Set only if caller didn't already set it.
+        new_env.setdefault("PYTHONIOENCODING", "utf-8")
+        kwargs["env"] = new_env
+    return _orig_subprocess_run(*args, **kwargs)
+
+
+subprocess.run = _utf8_subprocess_run
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "plugin" / "scripts"
 FIXTURE = ROOT / "tests" / "fixture"
