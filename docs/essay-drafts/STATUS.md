@@ -16,27 +16,40 @@
 | Review A | Applied. `docs/essay-drafts/2026-05-13-essay1-review-A.md` |
 | Review B | Codex adversarial review — **deferred** (Windows sandbox bug `CreateProcessWithLogonW failed: 1056`; retry on mac/Linux or with `-s untrusted`) |
 | Shipped | `882599c` essay#1: apply review A fixes (Tier 1 + selected Tier 2) + add LICENSE |
-| **Publish window** | Tue/Thu 8-11am PT |
-| **Status** | **READY-TO-SUBMIT — sliding 4+ days** |
+| Publish window | Tue/Thu 8-11am PT (style guide §5) |
+| **Submit date (LOCKED 2026-05-14)** | **2026-05-15 Friday — Beijing 23:00 Fri → 02:00 Sat = PT Fri 08:00 → 11:00** |
+| Pre-publish checklist (§10) | ✓ All 12 items PASS — verified 2026-05-14 EOD |
+| **Status** | **LOCKED-FOR-SUBMIT 2026-05-15 PT morning window** |
 
-### Why it's sliding
+### Why Friday (off-pattern)
 
-No structural blocker. The drafts are signed off. The slide is
-**bandwidth + attention**, not blocked-on-work.
+Style guide recommends Tue/Thu for HN, but Friday is a "submit now"
+decision over a "wait until next Tue (2026-05-19)" 4-more-day slide.
+The slip-cost (data freshness, momentum, cold-baseline-experiment
+sequencing) outweighs the Tue/Thu cadence preference for #1.
 
-### Decision needed
+For Essay #2 publish, return to Tue/Thu cadence (Essay #1 reception
+data will inform timing).
 
-Pick one of:
+### Submission inputs (ready to paste into HN)
 
-1. **Submit this week** (next slot: 2026-05-19 Tue 8-11am PT or 2026-05-21
-   Thu 8-11am PT). HN reception data feeds Essay #2's framing.
-2. **Submit week-after** (2026-05-26 Tue or 2026-05-28 Thu). Lets you
-   focus on the Q3 CI fix + v1.6 dogfood Week 2 first.
-3. **Hold indefinitely** with an explicit "what would unblock" written
-   here. (Discouraged — the data ages.)
+- **Title (≤80 chars):** `Code quality is solved. Business thresholds aren't.`
+- **URL:** Direct draft URL on github (raw markdown) OR a cleaner host
+  if a markdown→HTML pass is preferred. Default: paste raw github
+  link to the draft file.
+  - Github raw: `https://github.com/surebeli/kata/blob/main/docs/essay-drafts/2026-05-13-essay1-code-quality-vs-business-DRAFT.md`
+- **No `text` field** — HN submission is link-only (the essay's full body
+  is at the URL).
+- **Tags / category:** N/A on HN (no built-in tags); first comment can
+  set context if needed.
 
-Once submitted: post submission URL + HN front-page peak + comment-thread
-notes back here as part of the Essay #1 closeout.
+### Closeout once submitted
+
+Post back to this STATUS.md (and to the dogfood log):
+- HN submission URL
+- Front-page peak rank + timestamp
+- Comment-thread notes (top 5 substantive comments + author replies)
+- Reception-driven tone calibration for Essay #2
 
 ---
 
