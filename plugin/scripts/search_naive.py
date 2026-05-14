@@ -100,10 +100,14 @@ def main() -> int:
     # Rank order (higher is better, negated for sort-ascending):
     #   1. title match  — direct relevance
     #   2. frontmatter tag match
-    #   3. hub centrality — well-connected pages outrank fringe ones at parity
-    #   4. body match count
-    #   5. recency (`updated`)
-    #   6. path (deterministic tiebreak)
+    #   3. tier — active > archived > frozen. User-pinned pages bubble up
+    #      above implicit hub centrality. Strong title/tag match still wins,
+    #      so a relevant archived page beats a thin active page.
+    #   4. hub centrality — well-connected pages outrank fringe ones at parity
+    #   5. body match count
+    #   6. recency (`updated`)
+    #   7. path (deterministic tiebreak)
+    TIER_RANK = {"active": 2, "archived": 1, "frozen": 0}
     def rank_key(p):
         title_match = sum(1 for t in query_terms if t in p.title.lower())
         tag_match = 0
@@ -113,8 +117,9 @@ def main() -> int:
                             for tg in tags if t in str(tg).lower())
         body_match = sum(p.body.lower().count(t) for t in query_terms)
         hub = hub_score(p)
+        tier_score = TIER_RANK.get(tier_map.get(p.path), 0)
         updated = str(p.frontmatter.get("updated") or "0000-00-00")
-        return (-title_match, -tag_match, -hub, -body_match,
+        return (-title_match, -tag_match, -tier_score, -hub, -body_match,
                 _negstr(updated), p.path)
 
     filtered.sort(key=rank_key)

@@ -4,6 +4,74 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.1.0] — 2026-05-14 — wiki-search tier-aware ranking + coverage signal
+
+**Backward-compatible additions** to `wiki-search`. No skill API changes,
+no manifest changes. Pin behavior (`tier_override: active` in page
+frontmatter) now actually surfaces pinned pages in top-N results.
+
+### New
+
+- **`tier_breakdown` field** in `search_naive.py` JSON envelope — aggregate
+  tier distribution `{active, archived, frozen}` over the full unfiltered
+  match set. Lets callers see coverage shape at a glance without scanning
+  every result. Useful when a query has high archived hits but low active
+  hits, signaling stale or mis-categorized content.
+- **`low_active_coverage` hint** in `search_naive.py` JSON envelope — boolean,
+  true when active hits < 20% of total matches and total matches ≥ 3. The
+  threshold filters out tiny match sets to avoid false alarms.
+- **`wiki-search` SKILL.md** documents how to use both new fields in
+  summary lines and follow-up suggestions.
+
+### Changed
+
+- **Rank order** in `search_naive.py:rank_key` — `tier` is now a tiebreaker
+  after `tag_match`, before `hub`. Active > archived > frozen. User-pinned
+  pages bubble up above implicit hub centrality. Strong title/tag match
+  still wins. Net effect on prior queries against a real wiki: pinned
+  architecture pages went from absent in top-10 to top-1 / top-9 / top-10
+  positions for the same query.
+- **`_excerpt()`** in `search_naive.py` — strips H1/H2 heading lines
+  before term-finding so excerpts contain body content instead of
+  `"# Title  ## Section Header …"` noise. Falls back to original
+  behavior if the query term appears only in headings.
+
+### Motivation
+
+Real dogfood session on 2026-05-14: an agent ran three wiki-search
+queries and got 28/30 archived results. The agent correctly self-reported
+the surface signal but had to scan all results to detect the pattern.
+Investigating the cause revealed two design errors:
+
+1. Tier semantics designed for research wikis (where archived = stale)
+   mis-fired for architecture wikis (where archived = stable but
+   unmaintained). Fix: per-page `tier_override:` was already supported
+   in v1.6, but `tier_breakdown` + `low_active_coverage` make the
+   mis-fire visible to callers.
+2. `rank_key` did not consider tier as a ranking signal, so pinning a
+   page kept it in the active pool but did not surface it in top-N.
+   Fix: tier tiebreaker.
+
+Full evidence chain in `docs/dogfood-necallkit-hn-essay.md` →
+"2026-05-14 — wiki-search natural experiment". Pre-PRD design idea
+spawned by the same session: `docs/idea-coverage-matrix-dreamer.md`.
+
+### Migration
+
+None required. All changes are additive or behavior fixes to
+under-specified ordering. Existing wiki-search callers ignoring the new
+fields work unchanged.
+
+If you have pages whose architectural facts are stable but date-aged
+into `archived` tier, pin them with frontmatter:
+
+```yaml
+tier_override: active
+tier_reason: stable architecture fact, not subject to time decay
+```
+
+Next session's wiki-search will surface them in top results.
+
 ## [2.0.0] — 2026-05-13 — Rebrand to **Kata**
 
 **⚠ BREAKING CHANGE for slash commands.** All commands previously invoked
