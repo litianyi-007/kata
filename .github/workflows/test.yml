@@ -31,6 +31,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python: ["3.10", "3.11", "3.12", "3.13"]
+    # Force Python UTF-8 mode on every runner. Without this, windows-latest
+    # uses cp1252 by default and any subprocess that prints a non-ASCII
+    # character (e.g. "→" in schema_validate.py error messages) crashes
+    # the reader thread of subprocess.run(..., text=True), producing the
+    # "result.stdout is None" failure mode. PEP 686 makes UTF-8 mode the
+    # default in Python 3.15+; until everyone is on 3.15, set it explicitly.
+    env:
+      PYTHONUTF8: "1"
 
     steps:
       - uses: actions/checkout@v4

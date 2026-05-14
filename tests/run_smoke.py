@@ -31,12 +31,20 @@ from wiki_lib import wiki_slug as wiki_slug_for_test  # noqa: E402
 
 
 def run(argv: list[str]) -> dict:
-    """Run a script, parse JSON output. Print diagnostics on failure."""
+    """Run a script, parse JSON output. Print diagnostics on failure.
+
+    Forces UTF-8 on both sides of the subprocess boundary so non-ASCII output
+    (e.g. "→" in error messages) doesn't blow up on GitHub Actions
+    windows-latest runners, where the default locale is cp1252.
+    """
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         [sys.executable, *argv],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         cwd=str(ROOT),
+        env=env,
     )
     if result.returncode not in (0, 1):
         print(f"FAIL: {' '.join(argv)} exited {result.returncode}")
@@ -57,12 +65,17 @@ def run_with_env(argv: list[str], env_overrides: dict[str, str]) -> dict:
     Used for tests that depend on HOME / USERPROFILE / LLM_WIKI_HOME — the
     smoke test must not be at the mercy of the developer's actual home dir.
     """
+    # Same UTF-8 forcing as run(): cp1252 CI runners would otherwise crash
+    # the reader thread on non-ASCII output. Caller's env_overrides win over
+    # the UTF-8 forcing if they explicitly set PYTHONIOENCODING.
+    merged_env = {**os.environ, "PYTHONIOENCODING": "utf-8", **env_overrides}
     result = subprocess.run(
         [sys.executable, *argv],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         cwd=str(ROOT),
-        env={**os.environ, **env_overrides},
+        env=merged_env,
     )
     if result.returncode not in (0, 1):
         print(f"FAIL: {' '.join(argv)} exited {result.returncode}")

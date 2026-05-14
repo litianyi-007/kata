@@ -108,6 +108,11 @@ ${identity_block}"
     echo "[pre-commit] compliance OK (content + author identity)."
 fi
 
+# Force Python UTF-8 mode for the smoke + drift checks. Matches the
+# windows-latest CI workflow env (PYTHONUTF8=1) so a hook pass locally on
+# any locale (cp936, cp1252, …) lines up with what CI will see.
+export PYTHONUTF8=1
+
 echo "[pre-commit] checking SKILL.md drift…"
 $PYTHON scripts/build_skill_md.py --check || {
     echo "[pre-commit] SKILL.md drift detected. Run: python scripts/build_skill_md.py" >&2
