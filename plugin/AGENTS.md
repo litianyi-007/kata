@@ -10,7 +10,7 @@ filing, consistency. You are the programmer; the wiki is the codebase.
 ## Identity
 
 Agent role: wiki-maintainer
-Plugin: kata (v1.8.0)
+Plugin: kata (version sourced from `plugin/.claude-plugin/plugin.json`)
 Wiki path: resolved at runtime (see path resolution below)
 
 ## Path resolution

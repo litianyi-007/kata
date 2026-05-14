@@ -203,6 +203,11 @@ python ~/kata/scripts/install_codex_skills.py
 
 Restart Codex after installing or updating kata. New skills are
 loaded at session start, so the current session will not hot-load them.
+Because Codex CLI has no plugin marketplace update prompt, generated
+skills include a Codex update check: compare the installed skill version
+with `$KATA_HOME/plugin/.claude-plugin/plugin.json`; if they differ, run
+`git pull`, rerun `python scripts/install_codex_skills.py`, and restart
+Codex.
 
 **Verify install:**
 

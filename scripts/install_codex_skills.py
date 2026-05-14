@@ -26,6 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_ROOT = REPO_ROOT / "plugin"
 SKILLS_ROOT = PLUGIN_ROOT / "skills"
 AGENTS_MD = PLUGIN_ROOT / "AGENTS.md"
+PLUGIN_MANIFEST = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
 
 FRONTMATTER_RE = re.compile(r"^(---\s*\n.*?\n---\s*\n)(.*)$", re.DOTALL)
 
@@ -37,7 +38,18 @@ def default_dest() -> Path:
     return Path.home() / ".codex" / "skills"
 
 
-def build_shared_prefix() -> str:
+def load_plugin_metadata() -> dict[str, str]:
+    data = json.loads(PLUGIN_MANIFEST.read_text(encoding="utf-8"))
+    name = str(data.get("name", "")).strip()
+    version = str(data.get("version", "")).strip()
+    if not name:
+        raise ValueError("plugin manifest missing name")
+    if not version:
+        raise ValueError("plugin manifest missing version")
+    return {"name": name, "version": version}
+
+
+def build_shared_prefix(plugin_metadata: dict[str, str]) -> str:
     text = AGENTS_MD.read_text(encoding="utf-8")
     if "## Skills" not in text:
         raise ValueError("plugin/AGENTS.md missing ## Skills section")
@@ -48,6 +60,7 @@ def build_shared_prefix() -> str:
 
     return (
         "## Shared kata rules for Codex\n\n"
+        f"Kata plugin version: {plugin_metadata['version']}\n\n"
         "This installed skill is generated from `plugin/skills/*/SKILL.md` "
         "plus the shared kata rules from `plugin/AGENTS.md`.\n\n"
         "Set `KATA_HOME` to the cloned kata repo root so commands in "
@@ -57,6 +70,17 @@ def build_shared_prefix() -> str:
         "(for example `~/.codex/skills`). Restart Codex after installing or "
         "updating these skills, and do not rely on AGENTS.md to register "
         "skills.\n\n"
+        "## Codex update check\n\n"
+        "Codex CLI does not provide a marketplace update prompt for generated "
+        "skills. At the start of a kata skill invocation, if "
+        "`$KATA_HOME/plugin/.claude-plugin/plugin.json` is readable, compare "
+        f"its `version` to the installed version above "
+        f"({plugin_metadata['version']}). If they differ, tell the user the "
+        "Codex skills are stale and ask them to run `cd \"$KATA_HOME\"`, "
+        "`git pull`, `python scripts/install_codex_skills.py`, then restart "
+        "Codex. If `KATA_HOME` is unset or the manifest is unreadable, mention "
+        "that the update check could not run and remind the user to set "
+        "`KATA_HOME` to the cloned kata repo root.\n\n"
         f"{common}\n"
     )
 
@@ -109,9 +133,12 @@ def main() -> int:
             raise ValueError(f"missing skills directory: {SKILLS_ROOT}")
         if not AGENTS_MD.exists():
             raise ValueError(f"missing AGENTS.md: {AGENTS_MD}")
+        if not PLUGIN_MANIFEST.exists():
+            raise ValueError(f"missing plugin manifest: {PLUGIN_MANIFEST}")
 
         args.dest.mkdir(parents=True, exist_ok=True)
-        shared_prefix = build_shared_prefix()
+        plugin_metadata = load_plugin_metadata()
+        shared_prefix = build_shared_prefix(plugin_metadata)
         installed = []
         for skill_dir in sorted(p for p in SKILLS_ROOT.iterdir() if p.is_dir()):
             if not (skill_dir / "SKILL.md").exists():
@@ -125,10 +152,14 @@ def main() -> int:
             "skills": installed,
             "repo_root": str(REPO_ROOT.resolve()),
             "plugin_root": str(PLUGIN_ROOT.resolve()),
+            "plugin_name": plugin_metadata["name"],
+            "plugin_version": plugin_metadata["version"],
+            "plugin_manifest": str(PLUGIN_MANIFEST.resolve()),
             "restart_required": True,
             "notes": [
                 "Set KATA_HOME to the cloned kata repo root.",
                 "Restart Codex to pick up new or updated skills.",
+                "Codex skills include an update check against plugin/.claude-plugin/plugin.json.",
             ],
         }
         print(json.dumps(payload, ensure_ascii=True))

@@ -2084,9 +2084,22 @@ exit 0
     codex_root = codex_dir / "skills"
     installer = ROOT / "scripts" / "install_codex_skills.py"
     install = run([str(installer), "--dest", str(codex_root)])
+    plugin_manifest = json.loads(
+        (ROOT / "plugin" / ".claude-plugin" / "plugin.json").read_text(
+            encoding="utf-8"))
+    marketplace = json.loads(
+        (ROOT / ".claude-plugin" / "marketplace.json").read_text(
+            encoding="utf-8"))
+    marketplace_plugin = next(
+        p for p in marketplace["plugins"]
+        if p["name"] == plugin_manifest["name"])
+    assert_eq("claude plugin manifest version",
+              marketplace_plugin["version"], plugin_manifest["version"])
     assert_eq("codex installer result", install["result"], "installed")
     assert_eq("codex installer restart_required",
               install["restart_required"], True)
+    assert_eq("codex installer plugin_version",
+              install["plugin_version"], plugin_manifest["version"])
     assert_ge("codex installer skill_count", install["skill_count"], 13)
     wiki_init_skill = codex_root / "wiki-init" / "SKILL.md"
     assert wiki_init_skill.exists(), \
@@ -2094,6 +2107,16 @@ exit 0
     installed_text = wiki_init_skill.read_text(encoding="utf-8")
     assert "KATA_HOME" in installed_text, \
         "installed skill should explain how Codex resolves KATA_HOME"
+    assert f"Kata plugin version: {plugin_manifest['version']}" \
+        in installed_text, \
+        "installed skill should carry the shared plugin manifest version"
+    assert "## Codex update check" in installed_text, \
+        "installed skill should prompt Codex agents to check for updates"
+    assert "$KATA_HOME/plugin/.claude-plugin/plugin.json" in installed_text, \
+        "installed skill should point at the shared plugin manifest"
+    assert "git pull" in installed_text and "install_codex_skills.py" \
+        in installed_text, \
+        "installed skill should tell Codex users how to update/reinstall"
     assert "Before any operation except `wiki-init` and `wiki-search`" \
         in installed_text, \
         "installed skill should carry common kata session rules"
