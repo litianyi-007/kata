@@ -3864,3 +3864,61 @@ page." See `docs/idea-coverage-matrix-dreamer.md` for the full sketch.
 - Session jsonl: `~/.codex/sessions/2026/05/14/rollout-2026-05-14T00-38-38-...jsonl`
 - Final spec target path: `docs/prd/F016-electron-vue2-uikit-reuse/`
   (not yet created on NECallKit side)
+
+### 2026-05-14 rerun follow-up — pin + rank-fix evidence
+
+After the 00:42 session and the analysis above, four architecture
+pages on `~/.llm-wiki/NECallKit` were pinned to `tier_override: active`
+(see `wiki-tier` action) and `search_naive.py` got two fixes
+(`tier_breakdown` aggregate + `TIER_RANK` rank tiebreaker) shipped in
+commits `48360c8` and `d3a7945` on `surebeli/kata`. A fresh Codex
+session was then asked to re-run the same three queries cold (no
+prior conversation context) and produce a single new confidence
+number — explicitly NOT a new F016 spec.
+
+**Rerun numbers (top-10 active surfaces, before → after):**
+
+| Query | Before | After |
+|---|---|---|
+| `Electron Vue2 web-vue3 reuse vue3-uikit` | 0 / 10 | 3 / 10 |
+| `electron web reuse thin wrapper shared core` | 0 / 10 | 4 / 10 |
+| `Web basic-vue2 Vue2 demo callkit-vue2-ui` | 2 / 10 | 5 / 10 |
+| **Total** | **2 / 30** | **12 / 30** |
+
+Tier-pool delta (unfiltered): active hits 17 → 20 (per-query top
+shows tighter movement because rank now bubbles pinned pages up).
+
+**Confidence rerun.**
+
+- before: 0.66 (Medium) — original 00:42 session, all 28/30
+  archived, agent reported labeling gap honestly
+- after:  0.82 (High) — rerun session, top-10 surfaces the pinned
+  architecture-overview + unified-public-contract + reuse-handbook
+- delta:  **+0.16**
+
+**Agent's own justification** (verbatim from rerun output):
+
+> "active tier 现在把架构总览、统一 public contract 和 reuse
+> handbook 推到前排，足以支持 shared core + thin wrapper 的 F016
+> 推荐，但 Vue2 专项仍主要靠 Vue3/Web 边界外推，所以不是 0.9+。"
+
+**Why this is the right delta size.**
+
+A delta of +0.16 (Medium → High but not Very-High) is the *honest*
+number. The fixes raised the surface signal — pinned architecture
+pages now lead the rank, so the agent can see the load-bearing
+content without scanning 5 archived pages. But the **content gap**
+on Vue2 specifically is unchanged: no page describes Vue2 Electron
+reuse explicitly. The agent correctly refused to claim 0.9+
+confidence. That refusal is the load-bearing observation for the
+essay's §⑤ thesis: "the tool's job is to make the agent's
+confidence track actual coverage, not maximize it."
+
+**What this leaves on the v1.7+ backlog.**
+
+The coverage-matrix dreamer idea (`docs/idea-coverage-matrix-dreamer.md`)
+is the only proposal that could close the Vue2 gap automatically — by
+surfacing absent cells in a stack × platform grid as gap candidates
+rather than waiting for someone to notice the gap manually. The pin+
+rank fixes shipped today are the *surface* layer; the gap-detection
+layer is the foreshadow.

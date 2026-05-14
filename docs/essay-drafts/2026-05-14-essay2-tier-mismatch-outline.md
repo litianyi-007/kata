@@ -143,9 +143,20 @@ the fix exposed.
    a pinned architecture overview.
 6. Second fix: insert tier as a tiebreaker after tag-match, before hub.
    Active > archived > frozen. ~10 lines of Python.
-7. Re-run. Pinned pages now occupy positions 1, 9, 10 of the top 10.
-   `--tier=active` filter returns the four pinned pages as positions
-   1-4 plus one auto-active. Total time: another 10 minutes.
+7. Re-run, now driven from a **fresh Codex session** with no prior
+   conversation context — the same cold-start shape as the 00:42
+   session that produced the 0.66 number. Three queries, top-10 each:
+
+   | Query | Active in top-10 before | Active in top-10 after |
+   |---|---|---|
+   | "Electron Vue2 web-vue3 reuse vue3-uikit" | 0 | 3 |
+   | "electron web reuse thin wrapper shared core" | 0 | 4 |
+   | "Web basic-vue2 Vue2 demo callkit-vue2-ui" | 2 | 5 |
+   | **Total active surfaces** | **2 / 30** | **12 / 30** |
+
+   Six-fold lift on the metric the original Codex session implicitly
+   complained about. Total session time for the rerun: another 10
+   minutes including the agent's verification reads.
 
 ### ⑤ The real insight — tier semantics are domain-dependent (target 400 words)
 
@@ -186,10 +197,42 @@ The insight is global:
    right answer." It's "the agent reports a surface that lets me see
    when my tool's design is wrong."
 
+5. **The rerun confidence delta — and what it didn't fix.** A fresh
+   cold-start Codex session, same three queries, same three reference
+   pages, produced a new self-reported confidence:
+
+   > before: 0.66 (Medium) → after: 0.82 (High) → delta: **+0.16**
+   >
+   > Agent's own one-sentence justification: "active tier 现在把架构
+   > 总览、统一 public contract 和 reuse handbook 推到前排，足以支持
+   > shared core + thin wrapper 的 F016 推荐，但 Vue2 专项仍主要
+   > 靠 Vue3/Web 边界外推，所以不是 0.9+。"
+
+   The honest part is the second half. The fixes raised the **surface
+   signal** the agent could see, but the wiki still had a **content
+   gap** — Vue2 was never written about explicitly. The agent saw
+   that gap, named it, and refused to inflate the confidence above
+   what the data supported. That refusal is what the tier-policy +
+   rank fixes were really for: not "make the answer more confident,"
+   but "make the agent's confidence track the actual coverage."
+
+   A v1.6 dreamer can't fill that Vue2 content gap — only the
+   coverage-matrix idea (`docs/idea-coverage-matrix-dreamer.md`) can
+   surface absent dimensions as gap candidates. That's v1.7+. The
+   surface fixes shipped today; the gap-detection fix is the
+   foreshadow.
+
 ### ⑥ Resolution — what changed and what didn't (target 250 words)
 
-1. Two commits to kata public main: `48360c8` (search-naive rank +
-   tier_breakdown) and `59b9313` (dogfood evidence + v1.7+ idea).
+1. Four commits to kata public main covering the surface fixes:
+   `48360c8` (tier_breakdown + excerpt body-bias), `59b9313` (dogfood
+   evidence + coverage-matrix idea), `d3a7945` (TIER_RANK rank
+   tiebreaker + v2.1.0 manifest bump), `e6cc313` (plugin.json bump
+   to 2.1.0 + Codex update path documented). Plus `e8b1271`
+   (pre-commit hook now scans author identity — a separate compliance
+   leak surfaced during this same session, a meta-instance of the
+   pattern: AI agents running my tooling expose every design hole at
+   once, not in sequence).
    One commit to NECallKit wiki (`tier_override:` on 4 pages).
 2. F016 (the Vue2 spec that triggered this) is **unchanged**. The
    architectural recommendation didn't depend on which tier the
