@@ -40,9 +40,10 @@ cd "$REPO_ROOT"
 
 # ============================================================
 # Stage 0 — Compliance blocklist scan
-# Rejects the commit if any staged content matches a blocklist
-# pattern. Runs FIRST so we fail fast and never run expensive
-# checks on a commit that's going to be rejected anyway.
+# Rejects the commit if any staged content OR the would-be author
+# identity (name + email) matches a blocklist pattern. Runs FIRST
+# so we fail fast and never run expensive checks on a commit that's
+# going to be rejected anyway.
 # Bypass with: git commit --no-verify (use sparingly)
 # ============================================================
 BLOCKLIST=".compliance-blocklist.txt"
@@ -55,14 +56,34 @@ if [ -f "$BLOCKLIST" ]; then
         -- . ":(exclude)$BLOCKLIST" \
         | grep -E '^\+' | grep -vE '^\+\+\+' || true)
 
-    if [ -n "$diff_added" ]; then
+    # Stage 0a: scan the author identity that this commit will use. The diff
+    # scan above only sees file content, so a corp-email author header slips
+    # through. We treat author/committer name+email as if they were a +line.
+    # Format: "Name <email>" — same shape as a git log %an <%ae> token.
+    author_ident=$(git var GIT_AUTHOR_IDENT 2>/dev/null | sed -E 's/ [0-9]+ [-+][0-9]{4}$//' || true)
+    committer_ident=$(git var GIT_COMMITTER_IDENT 2>/dev/null | sed -E 's/ [0-9]+ [-+][0-9]{4}$//' || true)
+
+    # Concatenate into a single block for unified pattern scanning. Prefix
+    # each line with "+author:" / "+committer:" so violation reports tell
+    # you which field tripped the rule, not just the matched pattern.
+    identity_block=""
+    [ -n "$author_ident" ] && identity_block="${identity_block}+author: ${author_ident}
+"
+    [ -n "$committer_ident" ] && [ "$committer_ident" != "$author_ident" ] \
+        && identity_block="${identity_block}+committer: ${committer_ident}
+"
+
+    scan_target="${diff_added}
+${identity_block}"
+
+    if [ -n "$scan_target" ]; then
         violations=""
         while IFS= read -r line; do
             # Strip inline comments and trim whitespace
             pattern=$(printf '%s' "$line" | sed -E 's/[[:space:]]*#.*$//' | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')
             [ -z "$pattern" ] && continue
 
-            hit=$(printf '%s\n' "$diff_added" | grep -E -e "$pattern" || true)
+            hit=$(printf '%s\n' "$scan_target" | grep -E -e "$pattern" || true)
             if [ -n "$hit" ]; then
                 sample=$(printf '%s\n' "$hit" | head -1 | cut -c1-120)
                 violations="$violations
@@ -74,14 +95,17 @@ if [ -f "$BLOCKLIST" ]; then
 
         if [ -n "$violations" ]; then
             echo >&2
-            echo "[pre-commit] BLOCKED — compliance violations in staged content:" >&2
+            echo "[pre-commit] BLOCKED — compliance violations in staged content or author identity:" >&2
             printf '%s\n' "$violations" >&2
+            echo "[pre-commit] If the match is on +author: or +committer:, fix git config:" >&2
+            echo "[pre-commit]   git config --local user.email <public-email>" >&2
+            echo "[pre-commit]   git config --local user.name  <public-name>" >&2
             echo "[pre-commit] If this is a false positive, edit $BLOCKLIST." >&2
             echo "[pre-commit] If genuinely intentional, override once with: git commit --no-verify" >&2
             exit 1
         fi
     fi
-    echo "[pre-commit] compliance OK."
+    echo "[pre-commit] compliance OK (content + author identity)."
 fi
 
 echo "[pre-commit] checking SKILL.md drift…"
