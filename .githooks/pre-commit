@@ -29,14 +29,19 @@ if [ -z "$PYTHON" ]; then
     exit 0
 fi
 
-# Only run if any of the relevant paths changed in this commit.
-RELEVANT_PATHS='^(plugin/scripts/|plugin/skills/|schema/|tests/|scripts/|SKILL\.md$|CHANGELOG\.md$)'
-if ! git diff --cached --name-only | grep -qE "$RELEVANT_PATHS"; then
-    exit 0
-fi
-
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
+
+# Determine which heavy checks (smoke + SKILL.md drift) are relevant for
+# this commit. Stage 0 (compliance + author identity) ALWAYS runs — it
+# only inspects staged content + the git identity, both of which can
+# leak corp data regardless of which files changed.
+RELEVANT_PATHS='^(plugin/scripts/|plugin/skills/|schema/|tests/|scripts/|SKILL\.md$|CHANGELOG\.md$)'
+if git diff --cached --name-only | grep -qE "$RELEVANT_PATHS"; then
+    RUN_HEAVY_CHECKS=1
+else
+    RUN_HEAVY_CHECKS=0
+fi
 
 # ============================================================
 # Stage 0 — Compliance blocklist scan
@@ -108,21 +113,30 @@ ${identity_block}"
     echo "[pre-commit] compliance OK (content + author identity)."
 fi
 
-# Force Python UTF-8 mode for the smoke + drift checks. Matches the
-# windows-latest CI workflow env (PYTHONUTF8=1) so a hook pass locally on
-# any locale (cp936, cp1252, …) lines up with what CI will see.
-export PYTHONUTF8=1
+# The heavy checks (SKILL.md drift + smoke) only run when the commit
+# touches code that could affect them. Pure-docs commits skip these to
+# keep the hook fast, but Stage 0 above has already validated compliance
+# + author identity unconditionally.
+if [ "$RUN_HEAVY_CHECKS" = "1" ]; then
+    # Force Python UTF-8 mode for the smoke + drift checks. Matches the
+    # windows-latest CI workflow env (PYTHONUTF8=1) so a hook pass locally
+    # on any locale (cp936, cp1252, …) lines up with what CI will see.
+    export PYTHONUTF8=1
 
-echo "[pre-commit] checking SKILL.md drift…"
-$PYTHON scripts/build_skill_md.py --check || {
-    echo "[pre-commit] SKILL.md drift detected. Run: python scripts/build_skill_md.py" >&2
-    exit 1
-}
+    echo "[pre-commit] checking SKILL.md drift…"
+    $PYTHON scripts/build_skill_md.py --check || {
+        echo "[pre-commit] SKILL.md drift detected. Run: python scripts/build_skill_md.py" >&2
+        exit 1
+    }
 
-echo "[pre-commit] running smoke tests…"
-$PYTHON tests/run_smoke.py || {
-    echo "[pre-commit] smoke tests failed. Fix or commit with --no-verify." >&2
-    exit 1
-}
+    echo "[pre-commit] running smoke tests…"
+    $PYTHON tests/run_smoke.py || {
+        echo "[pre-commit] smoke tests failed. Fix or commit with --no-verify." >&2
+        exit 1
+    }
 
-echo "[pre-commit] all checks passed."
+    echo "[pre-commit] all checks passed."
+else
+    echo "[pre-commit] no relevant paths changed — skipping heavy checks (smoke + drift)."
+    echo "[pre-commit] compliance + identity already verified."
+fi
