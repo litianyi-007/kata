@@ -162,18 +162,40 @@ After each weekly run:
 
 **Run summary** (NECallKit corpus, daily dreaming runs)
 
-- Daily run files: `dreaming/2026-05-08.md` through `dreaming/2026-05-13.md` (6 files)
-- Wiki pages: ~50 day-1 → ~110 by 2026-05-12
-- Acceptance/reject disposition: **not yet recorded per-candidate** —
-  the dreaming files exist but the structured "for each candidate:
-  accept/reject" log has not been kept. **Action**: do this before
-  Week 2 ends; otherwise Week 1 has no acceptance-rate datum.
+- Daily run files: `dreaming/2026-05-08.md` through `dreaming/2026-05-14.md` (7 files, full Week 1 coverage)
+- Wiki pages: ~50 day-1 → 119 by Week 1 end (+69, 1.4× scale)
+- Trigger pattern: 6 of 7 days produced 0 candidates; 1 day (**2026-05-12**) produced a burst of 7 candidates
+- The 2026-05-12 burst was triggered by the prior day's heavy ingest
+  (F011 master-merge-back-preflight + offline-message contract +
+  electron-android switchCallType update) plus same-day kata
+  self-meta wiki multi-machine work
+- **Cron cadence: clean** — 7/7 daily files present at expected
+  timestamps (22:00 server time); automation has not missed a day
 
-**Disposition** — placeholder until per-day candidate review is done
+**Disposition** — 2026-05-12 burst, retroactive review at 2026-05-15
+
+Effective acceptance signal across two channels:
+
+- `wiki-dream --apply` (the dreamer's native action) — **0/7 invoked**
+- `wiki-tier --pin` with `tier_override: active` (permanent override) —
+  **1/7 effectively accepted** (candidate #4)
 
 | # | Page | Score | Reasons (short) | Decision | Notes |
 |---|------|-------|-----------------|----------|-------|
-|   |      |       |                 |          | review pending |
+| 1 | `decisions/electron-switchcalltype-remediation-history.md` | 0.9 | Entity overlap with `electron-camera-switch-microphone-state-regression-bugfix-set` + `electron-web-api-reuse-and-merge-back-switch-contract` | ❌ | Silent reject; remains archived. Re-evaluate if a fresh switchCallType regression bug arrives. |
+| 2 | `decisions/necallkit-docs-guides-electron-flutter-merge-review-checklist.md` | 0.9 | Linked from new F011 master-merge-back-preflight | ❌ | Silent reject; merge-review checklist is fresh-pull-only, doesn't need active surface. |
+| 3 | `modules/002-electron-callkit-contracts-electron-node-nim-boundary.md` | 0.9 | Entity overlap + linked from `necallkit-docs-guides-electron-merge-impact-baseline` and `necallkit-offline-message-contract-and-electron-link-2026-05-11` | ❌ | Silent reject; the boundary contract is stable but the *active* surfaces are the page set already linked from it. |
+| 4 | `modules/necallkit-architecture-overview.md` | 0.9 | Linked from new merge-impact-baseline | ✅ | **Accepted via `wiki-tier --pin` on 2026-05-14** (one of 4 architecture pages pinned). Note: pinned, NOT bumped via `--apply`. |
+| 5 | `queries/002-electron-callkit-example-contract-boundary-query.md` | 0.9 | Entity overlap with node-nim-boundary + reuse-operating-boundary | ❌ | Silent reject; query page, not architecture invariant — natural fit for archived tier. |
+| 6 | `queries/necallkit-electron-web-reuse-operating-boundary-query.md` | 0.9 | Entity overlap + linked from new switch-contract module | ❌ | Silent reject; same rationale as #5. |
+| 7 | `features/002-electron-callkit-electron-reference-alignment-nim-uikit-electron.md` | 0.65 | Linked from offline-message contract | ❌ | Silent reject; reference-alignment is a one-time historical note, not a recurring touch point. |
+
+**Effective accept rate**: 1/7 = **14%** (channel: `tier_override: active`).
+**Native channel accept rate**: 0/7 = **0%** (channel: `--apply`).
+
+PRD §4 acceptance gate is 60%. Week 1 is **below the gate on both channels**,
+but the data calls into question whether `--apply` is the right primitive
+for the acceptance signal at all (see Surprises below).
 
 **Surprises** — pages I'd forgotten existed, or connections I hadn't seen:
 
@@ -191,6 +213,27 @@ After each weekly run:
   dreamer (idea logged in `docs/idea-coverage-matrix-dreamer.md`)
   would have flagged stack=Vue2 × platform=Electron as an empty cell
   with surrounding active coverage on Vue3.
+- **Channel mismatch — dreamer's accept primitive vs user's real
+  action.** PRD §4 assumes the accept signal is `wiki-dream --apply`
+  (one-shot tier bump). Across the only candidate-burst this Week 1
+  (2026-05-12, 7 candidates), **0 `--apply` invocations** occurred,
+  yet **1 candidate was meaningfully accepted** via
+  `wiki-tier --pin` with `tier_override: active` — a permanent
+  override, not a one-shot bump. The dreamer's UI offers `--apply`
+  as the canonical accept action, but for the case the dogfood is
+  actually exercising (stable architecture facts re-surfaced because
+  fresh ingests link to them), the right action is permanent pin,
+  not transient bump. v1.6 retrospective should either redefine the
+  accept primitive or have the dreamer emit both options per
+  candidate.
+- **Algorithmic trigger is sparse but accurate when it fires.** 6/7
+  days produced 0 candidates and 1/7 fired with 7 candidates at
+  threshold ≥0.9. That's not a bug — co-occurrence requires
+  multi-page fresh ingests to trigger, and most days only had
+  single-page activity. When it fired, the architectural-overview
+  page in the burst was independently confirmed via wiki-tier pin
+  two days later. Algorithm correctly surfaced what mattered; the
+  channel for "yes, accept this" was what missed.
 
 **Tuning thoughts** — would I want a different threshold / weight if I
 were running this for a year?
