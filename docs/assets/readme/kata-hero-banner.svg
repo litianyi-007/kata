@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" font-family="'SF Mono','Fira Code','Cascadia Code',monospace">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f0f1a"/>
+      <stop offset="100%" stop-color="#1a1a2e"/>
+    </linearGradient>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee"/>
+    </marker>
+    <style>
+      .title{font-size:122px;font-weight:700;fill:#e2e8f0;letter-spacing:.06em}
+      .tag{font-size:28px;fill:#cbd5e1;letter-spacing:.01em}
+      .cap{font-size:15px;fill:#94a3b8}
+      .small{font-size:12px;fill:#64748b;letter-spacing:.08em}
+      .node{fill:#0f172a;stroke:#334155;stroke-width:1.4}
+      .nodeHot{fill:#1c1917;stroke:#fb923c;stroke-width:1.5}
+      .edge{fill:none;stroke:#22d3ee;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+      .grid{stroke:#1e293b;stroke-width:.8;opacity:.6}
+    </style>
+  </defs>
+  <rect width="1200" height="400" fill="url(#bg)"/>
+  <g opacity=".55">
+    <line x1="60" y1="70" x2="1140" y2="70" class="grid"/>
+    <line x1="60" y1="330" x2="1140" y2="330" class="grid"/>
+    <line x1="60" y1="70" x2="60" y2="330" class="grid"/>
+    <line x1="1140" y1="70" x2="1140" y2="330" class="grid"/>
+  </g>
+  <text x="76" y="178" class="title">Kata</text>
+  <text x="84" y="230" class="tag">Compile business semantics. Agents read before they write.</text>
+  <text x="84" y="286" class="small">$ wiki ingest -> cross-link -> preflight</text>
+  <g transform="translate(865 82)">
+    <rect x="0" y="0" width="250" height="230" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+    <path d="M 72 72 C 125 18 207 62 199 124" class="edge" marker-end="url(#arrow-cyan)"/>
+    <path d="M 190 146 C 151 207 65 190 53 124" class="edge" marker-end="url(#arrow-cyan)"/>
+    <path d="M 48 101 C 36 63 52 42 83 35" class="edge" marker-end="url(#arrow-cyan)" opacity=".75"/>
+    <circle cx="72" cy="72" r="15" class="node"/>
+    <circle cx="200" cy="124" r="15" class="nodeHot"/>
+    <circle cx="53" cy="124" r="15" class="node"/>
+    <circle cx="118" cy="181" r="15" class="node"/>
+    <text x="72" y="77" text-anchor="middle" font-size="11" fill="#22d3ee">src</text>
+    <text x="200" y="129" text-anchor="middle" font-size="11" fill="#fb923c">hub</text>
+    <text x="53" y="129" text-anchor="middle" font-size="11" fill="#22d3ee">x</text>
+    <text x="118" y="186" text-anchor="middle" font-size="11" fill="#22d3ee">read</text>
+  </g>
+  <text x="990" y="346" text-anchor="middle" class="cap">An AI-maintained wiki for project memory.</text>
+</svg>

@@ -1,7 +1,61 @@
 # Kata
 
-> **A self-evolving knowledge system for AI-paired builders.**
-> Inherit a kata, adapt it to your project, then transcend the form.
+![Kata — compile business semantics for AI-paired engineering. An AI-maintained wiki for project memory.](docs/assets/readme/kata-hero-banner.svg)
+
+## Quick install
+
+Pick the tool you use:
+
+```bash
+# Claude Code (recommended, plugin path)
+claude /plugin marketplace add surebeli/kata
+claude /plugin install kata@kata
+
+# OR — Codex CLI
+git clone https://github.com/surebeli/kata ~/kata
+cd ~/kata && python scripts/install_codex_skills.py
+export KATA_HOME=~/kata
+```
+
+Then in any project directory:
+
+```bash
+# Initialize a wiki for your project (interactive: picks categories per domain)
+claude /kata:wiki-init
+```
+
+You now have 13 skills (`wiki-init`, `wiki-ingest`, `wiki-search`,
+`wiki-graph`, `wiki-tier`, `wiki-dream`, …) operating on a fresh wiki at
+`~/.llm-wiki/<your-project>/`. Detailed install options below.
+
+## What problem this solves
+
+For a worked example of the failure mode kata addresses ("code-correct,
+business-wrong" — when LLMs ship code that passes review but breaks
+because of the team's local spec the model can't infer), see
+[the Essay #1 draft](docs/essay-drafts/2026-05-13-essay1-code-quality-vs-business-DRAFT.md).
+Three concrete bugs (B066/B070/B074), one wiki, +17 edges from one filed
+query.
+
+![One filed query, +17 edges. Imports averaged 5 edges per page. The wiki grows when you ask it questions, not when you load it.](docs/assets/essay/V1-wiki-compounding.svg)
+
+*The compounding moment.* Source data: 4-week dogfood on NECallKit
+(multi-platform Electron + native SDK). See the essay above for the full
+evidence chain.
+
+## The loop
+
+![The compounding loop: human curates source → wiki-ingest extracts and files → cross-links touch 10-15 existing pages → maintainer-decision query files back as a new hub page (+17 edges from one filed query) → next session reads compiled knowledge before writing code.](docs/assets/readme/kata-the-loop.svg)
+
+Each filed query becomes a hub. Hubs cross-link. The next agent's
+session lands on the hub before it writes a line.
+
+The remainder of this README covers: install options (A/B/C), the layered
+product model, design lineage from Karpathy's LLM-Wiki gist, the 13-skill
+contract, and operational guides (multi-machine sync, custom frontmatter
+dimensions, memory-tier policy).
+
+---
 
 ## What Kata is (the layered model)
 
@@ -99,6 +153,8 @@ schema validation in Claude Code? Continue below.
 
 ## How this differs from neighbors
 
+![Kata vs RAG comparison: RAG re-derives every query, cross-references inferred from embeddings, answer lives in chat (lost at session end), knowledge layer = retrieval cache. Kata compiles once and is kept current, cross-references are written into pages, answer becomes a wiki page (next session reads it), knowledge layer = compiled artifact. Tagline: Retrieval re-asks. Compilation remembers.](docs/assets/readme/kata-vs-rag.svg)
+
 |                          | This plugin                          | Obsidian Copilot / Smart Connections | MCP memory servers          | RAG / vector DB             |
 | ------------------------ | ------------------------------------ | ------------------------------------ | --------------------------- | --------------------------- |
 | Source of truth          | Your markdown files                  | Your markdown files                  | Server-side store           | Embedding index             |
@@ -139,7 +195,7 @@ The recommended install for Claude Code 2025+ users. Two-line setup:
 
 ```bash
 # 1. Register this repo as a marketplace (clones it into ~/.claude/plugins/)
-claude /plugin marketplace add litianyi/kata
+claude /plugin marketplace add surebeli/kata
 
 # 2. Install the kata plugin from the marketplace
 claude /plugin install kata@kata
@@ -158,7 +214,7 @@ claude /kata:wiki-init --domain "test" # interactive bootstrap should fire
 **Local-clone alternative** (for hacking on the plugin):
 
 ```bash
-git clone https://github.com/litianyi/kata
+git clone https://github.com/surebeli/kata
 cd kata
 claude /plugin marketplace add .          # add this clone as a marketplace
 claude /plugin install kata@kata
@@ -188,7 +244,7 @@ shared instructions that the installer injects into each generated skill.
 
 ```bash
 # 1. Clone kata to a stable home location
-git clone https://github.com/litianyi/kata ~/kata
+git clone https://github.com/surebeli/kata ~/kata
 
 # 2. Set KATA_HOME so installed skills can resolve plugin/scripts/*
 echo 'export KATA_HOME="$HOME/kata"' >> ~/.bashrc   # or ~/.zshrc

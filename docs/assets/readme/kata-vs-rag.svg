@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500" viewBox="0 0 1200 500" font-family="'SF Mono','Fira Code','Cascadia Code',monospace">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f0f1a"/>
+      <stop offset="100%" stop-color="#1a1a2e"/>
+    </linearGradient>
+    <style>
+      .title{font-size:22px;font-weight:700;fill:#e2e8f0;letter-spacing:.02em}
+      .headR{font-size:32px;font-weight:700;fill:#94a3b8;letter-spacing:.04em}
+      .headK{font-size:32px;font-weight:700;fill:#22d3ee;letter-spacing:.04em}
+      .left{font-size:17px;fill:#94a3b8}
+      .right{font-size:17px;fill:#e2e8f0}
+      .tag{font-size:24px;font-weight:700;fill:#cbd5e1;letter-spacing:.01em}
+      .line{stroke:#334155;stroke-width:1}
+      .thin{stroke:#1e293b;stroke-width:1}
+      .accent{fill:#fb923c;font-weight:700}
+    </style>
+  </defs>
+  <rect width="1200" height="500" fill="url(#bg)"/>
+  <text x="60" y="44" class="title">$ kata vs rag -- retrieval re-asks, compilation remembers</text>
+  <rect x="60" y="82" width="1080" height="314" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1.2"/>
+  <rect x="60" y="82" width="540" height="64" rx="6" fill="#111827" stroke="#334155" stroke-width="1"/>
+  <rect x="600" y="82" width="540" height="64" rx="6" fill="#0c1f2a" stroke="#22d3ee" stroke-width="1"/>
+  <line x1="600" y1="82" x2="600" y2="396" class="line"/>
+  <line x1="60" y1="146" x2="1140" y2="146" class="line"/>
+  <line x1="60" y1="208" x2="1140" y2="208" class="thin"/>
+  <line x1="60" y1="270" x2="1140" y2="270" class="thin"/>
+  <line x1="60" y1="332" x2="1140" y2="332" class="thin"/>
+  <text x="330" y="124" text-anchor="middle" class="headR">RAG</text>
+  <text x="870" y="124" text-anchor="middle" class="headK">Kata</text>
+  <text x="96" y="184" class="left">Re-derives every query</text>
+  <text x="636" y="184" class="right">Compiles once, kept current</text>
+  <text x="96" y="246" class="left">Cross-references inferred from embeddings</text>
+  <text x="636" y="246" class="right">Cross-references <tspan class="accent">written into pages</tspan></text>
+  <text x="96" y="308" class="left">Answer lives in chat (lost at session end)</text>
+  <text x="636" y="308" class="right">Answer becomes a wiki page <tspan class="accent">(next session reads it)</tspan></text>
+  <text x="96" y="370" class="left">Knowledge layer = retrieval cache</text>
+  <text x="636" y="370" class="right">Knowledge layer = <tspan class="accent">compiled artifact</tspan></text>
+  <line x1="60" y1="424" x2="1140" y2="424" class="line"/>
+  <text x="600" y="464" text-anchor="middle" class="tag">Retrieval re-asks. Compilation remembers.</text>
+</svg>

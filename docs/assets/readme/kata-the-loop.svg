@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" font-family="'SF Mono','Fira Code','Cascadia Code',monospace">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f0f1a"/>
+      <stop offset="100%" stop-color="#1a1a2e"/>
+    </linearGradient>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#fb923c"/>
+    </marker>
+    <style>
+      .title{font-size:22px;font-weight:700;fill:#e2e8f0;letter-spacing:.02em}
+      .sub{font-size:14px;fill:#94a3b8}
+      .box{fill:#0f172a;stroke:#334155;stroke-width:1.2}
+      .boxHot{fill:#1c1917;stroke:#fb923c;stroke-width:1.5}
+      .name{font-size:18px;font-weight:700;fill:#22d3ee}
+      .desc{font-size:12px;fill:#94a3b8}
+      .muted{font-size:12px;fill:#64748b;letter-spacing:.08em}
+      .edge{fill:none;stroke:#22d3ee;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrow-cyan)}
+      .inner{fill:none;stroke:#fb923c;stroke-width:2;stroke-linecap:round;stroke-dasharray:5 5;marker-end:url(#arrow-orange)}
+      .call{font-size:16px;font-weight:700;fill:#fb923c}
+    </style>
+  </defs>
+  <rect width="1200" height="600" fill="url(#bg)"/>
+  <text x="60" y="42" class="title">$ kata loop -- filed answers compound the graph</text>
+  <text x="60" y="66" class="sub">// Human-curated sources become durable project memory, then preflight for the next agent session.</text>
+  <circle cx="600" cy="318" r="208" fill="none" stroke="#1e293b" stroke-width="1" stroke-dasharray="4 6"/>
+  <path d="M 603 151 C 743 137 845 200 886 300" class="edge"/>
+  <path d="M 874 386 C 816 512 682 553 555 500" class="edge"/>
+  <path d="M 445 500 C 319 553 185 512 126 386" class="edge"/>
+  <path d="M 114 300 C 155 200 257 137 397 151" class="edge"/>
+  <path d="M 505 120 C 568 80 632 80 695 120" class="edge"/>
+  <path d="M 380 398 C 492 340 665 340 780 398" class="inner"/>
+  <rect x="480" y="95" width="240" height="86" rx="6" class="box"/>
+  <text x="600" y="128" text-anchor="middle" class="name">Source</text>
+  <text x="600" y="153" text-anchor="middle" class="desc">Human curates doc, article, decision</text>
+  <rect x="827" y="210" width="240" height="86" rx="6" class="box"/>
+  <text x="947" y="243" text-anchor="middle" class="name">wiki-ingest</text>
+  <text x="947" y="268" text-anchor="middle" class="desc">AI reads, extracts, files into wiki</text>
+  <rect x="740" y="414" width="240" height="86" rx="6" class="boxHot"/>
+  <text x="860" y="447" text-anchor="middle" class="name">Cross-link</text>
+  <text x="860" y="472" text-anchor="middle" class="desc">10-15 pages auto-cross-referenced</text>
+  <rect x="220" y="414" width="240" height="86" rx="6" class="boxHot"/>
+  <text x="340" y="447" text-anchor="middle" class="name">Filed query</text>
+  <text x="340" y="472" text-anchor="middle" class="desc">Answer becomes a new hub page</text>
+  <rect x="133" y="210" width="240" height="86" rx="6" class="box"/>
+  <text x="253" y="243" text-anchor="middle" class="name">Next session preflight</text>
+  <text x="253" y="268" text-anchor="middle" class="desc">Agent reads compiled knowledge first</text>
+  <rect x="742" y="335" width="264" height="38" rx="5" fill="#1c1917" stroke="#fb923c" stroke-width="1.2"/>
+  <text x="874" y="360" text-anchor="middle" class="call">+17 edges from 1 filed query</text>
+  <text x="600" y="554" text-anchor="middle" class="muted">COMPOUNDING MEMORY: query result -> page -> links -> next preflight</text>
+</svg>

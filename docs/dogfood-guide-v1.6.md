@@ -42,7 +42,7 @@ max_repromote_per_run: 10
 适合完整插件体验和 `/kata:*` slash command。
 
 ```bash
-claude /plugin marketplace add litianyi/kata
+claude /plugin marketplace add surebeli/kata
 claude /plugin install kata@kata
 ```
 
@@ -59,7 +59,7 @@ claude /schedule "0 23 * * 0" "/kata:wiki-dream"
 在真实 wiki 根目录执行：
 
 ```bash
-git clone https://github.com/litianyi/kata
+git clone https://github.com/surebeli/kata
 cp kata/plugin/AGENTS.md ./AGENTS.md
 cp -r kata/plugin/skills ./skills
 cp -r kata/plugin/scripts ./scripts
