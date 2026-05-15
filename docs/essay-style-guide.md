@@ -11,7 +11,6 @@
 Status: v1.2 — 2026-05-13 (Builder ethos added; brand locked to Kata)
 Owner: surebeli
 Source: distilled from style discussion 2026-05-13 (see git log of this file)
-Related: `docs/essay-framework-survey-2026-05-12.md` (candidate roster)
 
 ---
 
@@ -593,5 +592,5 @@ in 2+ essays.
 - Initial guide established from style discussion 2026-05-13.
 - Seeded with 6 signature visuals (V1-V6), 8 persona conventions,
   3-platform adaptation matrix.
-- First essay following this guide: TBD (selected from
-  `docs/essay-framework-survey-2026-05-12.md`).
+- First essay following this guide: Essay #1 "Code quality is solved.
+  Business thresholds aren't." (HN submission 2026-05-15).
