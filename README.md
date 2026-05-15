@@ -1,5 +1,9 @@
 # Kata
 
+[![tests](https://github.com/surebeli/kata/actions/workflows/test.yml/badge.svg)](https://github.com/surebeli/kata/actions/workflows/test.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-22d3ee.svg)](LICENSE)
+[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-22d3ee.svg)](https://github.com/surebeli/kata#installation)
+
 ![Kata — compile business semantics for AI-paired engineering. An AI-maintained wiki for project memory.](docs/assets/readme/kata-hero-banner.svg)
 
 ## Quick install
@@ -711,21 +715,24 @@ somewhere durable so the wiki maintainer can ingest it.
 
 ```
 # 1. Initialize — wiki-init is INTERACTIVE: it asks about your domain and
-#    proposes categories that fit (entities/concepts for research,
-#    characters/plot for fiction, people/projects for business, etc.)
-/kata:wiki-init --path=~/research-wiki --domain="transformer ML research"
+#    proposes categories that fit. For a software project, it'll suggest
+#    modules/features/bugs/decisions/queries/lessons. For research,
+#    entities/concepts/comparisons. For fiction, characters/plot/themes.
+/kata:wiki-init --path=~/.llm-wiki/my-project --domain="Electron + native SDK"
 
 # 2. git init is suggested automatically — the wiki is a git repo by default,
-#    version history for free.
+#    version history + multi-machine sync via wiki-sync for free.
 
-# 3. Ingest your first source (images auto-downloaded to raw/assets/)
-/kata:wiki-ingest https://arxiv.org/abs/2301.00000
+# 3. Ingest your first source (a docs file, ARCHITECTURE.md, a bug writeup —
+#    images auto-downloaded to raw/assets/; cross-references written in)
+/kata:wiki-ingest docs/ARCHITECTURE.md
 
-# 4. See what was compiled
+# 4. See what was compiled — pages created, edges added, suggested next ingests
 /kata:wiki-digest
 
-# 5. Search for a topic
-/kata:wiki-search "attention mechanism"
+# 5. Ask a real maintainer-decision question; the answer files back as a new
+#    hub page that future agents read before they write code
+/kata:wiki-query "what's our IPC topology between Electron renderer and native SDK?"
 
 # 6. Explore the graph around a page (BFS over [[wikilinks]])
 /kata:wiki-graph --neighbors attention --depth=2 --format=mermaid
@@ -992,14 +999,18 @@ temporal) land in v1.8+. See [`docs/dreaming.md`](docs/dreaming.md) for
 full design and [`docs/dogfood-guide-v1.6.md`](docs/dogfood-guide-v1.6.md)
 for the dogfood loop.
 
-> **Dogfood status (2026-05-07):** v1.6 (dreaming) and v1.8 (sync)
-> 4-week observation windows are **both Pending** on a real wiki —
-> CI gates are green, qualitative gates unverified. Recommended plan:
-> run both in parallel on the same wiki via cron line
-> `wiki-sync --auto && wiki-dream`. See
+> **Dogfood status (updated 2026-05-15):** v1.6 (dreaming) is **Week 1
+> of 4 on the NECallKit wiki** (started 2026-05-08). 7/7 daily runs
+> have completed cleanly; 1 candidate-burst day (2026-05-12) surfaced
+> 7 candidates, 1 effectively accepted via `tier_override: active`.
+> Effective Week-1 accept rate: 14% (below PRD §4's 60% gate; the
+> finding so far is that the accept primitive `--apply` may not match
+> the actual user-intent channel — see `docs/dogfood-v1.6.md` for the
+> channel-mismatch analysis). v1.8 (sync) is in parallel observation.
+> CI gates are green on both. Window closes ~2026-06-05; retrospective
+> + GA decision follow that. See
 > [`docs/dogfood-v1.6.md`](docs/dogfood-v1.6.md) (dreaming) and
-> [`docs/dogfood-v1.8.md`](docs/dogfood-v1.8.md) (sync) for the
-> combined startup checklist.
+> [`docs/dogfood-v1.8.md`](docs/dogfood-v1.8.md) (sync) for full state.
 
 ## Multi-machine sync (v1.8 MVP)
 
