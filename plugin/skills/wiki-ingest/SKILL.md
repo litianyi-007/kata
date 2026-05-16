@@ -2,7 +2,7 @@
 name: wiki-ingest
 description: "Ingest a source into the wiki: save raw content and referenced images, prompt the user for any custom frontmatter dimensions declared in SCHEMA.md, extract key information, create or update wiki pages per SCHEMA.md conventions, and update index.md and log.md."
 user-invocable: true
-argument-hint: "<url|file|text> [--batch] [--no-discuss] [--no-images] [--set=key=value,...]"
+argument-hint: "<url|file|text> [--batch] [--no-discuss] [--no-images] [--no-spec-preflight] [--set=key=value,...]"
 ---
 
 # wiki-ingest
@@ -86,6 +86,60 @@ one drives the tier computation.
 Unless `--no-discuss` or running in an automated context: surface 3–5 key insights
 and ask the user what to emphasize **before** writing pages. This is Karpathy's
 "stay involved" mode — the user guides the direction, you do the writing.
+
+### ②b Spec preflight (if source is a spec-type page) — v1.13 SHM
+
+**When this step runs**:
+
+Read SCHEMA.md's `spec_authoring` block (skip if absent or `enabled: false`).
+If the block is enabled AND `spec_authoring.preflight == "auto"` (default) AND
+the captured raw source's frontmatter `type` is in `spec_authoring.spec_types`
+(default includes `decisions`, `prd`, `design`, `rfc`, `adr`, `task-spec`),
+run preflight before any wiki page is written:
+
+```bash
+python {plugin_root}/scripts/spec_preflight.py \
+    --new-spec {raw_source_path} \
+    --include-archived
+```
+
+The script emits a JSON envelope with ranked candidate prior specs. Present
+the top 5 to the user (or surface to the agent making authoring decisions)
+along with the relevance signals (`title_overlap`, `tag_overlap`,
+`link_reference`, `hub_score`, `type_match`).
+
+**For each top candidate, the author decides** (Phase 0 is advisory — Phase 2
+will enforce):
+
+1. **Skip** — the candidate is unrelated despite the surface overlap. No
+   action needed.
+2. **Declare a relationship** — add to the new spec's frontmatter:
+
+   ```yaml
+   spec_relationships:
+     - kind: supersedes | refines | extends | parallel | contradicts
+       target: <wiki-path-of-old-spec>
+       note: "<one-line rationale>"
+   ```
+
+Phase 0 does **not** auto-update the old spec — `kind: supersedes` does NOT
+trigger a banner / tier flip / reverse-link on the target page yet. Phase 3
+will add that. If a relationship clearly implies the old spec is dead, the
+author may also want to manually run `wiki-tier --pin <old-spec>:archived`
+or add a `tier_override:` line by hand.
+
+**When to skip this step** (no preflight needed):
+
+- `spec_authoring.enabled: false` (default for new wikis)
+- `spec_authoring.preflight: off`
+- Source's frontmatter `type` is not in spec_types
+- User passes `--no-spec-preflight` (force-skip override)
+- Wiki has fewer than 2 existing spec-type pages (no candidates possible)
+
+**Configuration override**: if the source's frontmatter `type` is in
+`spec_types` but the user explicitly wants to skip preflight for this
+ingest, accept `--no-spec-preflight` and proceed straight to ③. Note this
+in step ⑦ Report so the user knows preflight was bypassed.
 
 ### ③ Check existing pages
 

@@ -1,7 +1,7 @@
 ---
 name: kata
-description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 13 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync)."
-version: 2.0.0
+description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 14 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec). Spec History Management (v1.13) in Phase 0."
+version: 2.2.0
 author: surebeli
 license: MIT
 ---
@@ -127,7 +127,7 @@ confirmation. See `PLUGINS.md` (or the `wiki-query` skill) for the full spec.
 | `wiki-dream` | `[--since YYYY-MM-DD] [--strategy co-occurrence] [--apply --pages 1,2,3] [--explain <page>] [--out <file>]` | Auto-dreaming: re-evaluate frozen and archived pages against recent activity, surface candidates wh… |
 | `wiki-graph` | `[--query=<expr>] [--neighbors=<page> --depth=N] [--shortest-path=<a>,<b>] [--hubs] [--orphans] [--cluster=<tag>] [--limit=20] [--format=text\|json\|mermaid] [--tier=active\|all\|archived\|frozen]` | Query the wiki as a graph without maintaining a graph DB. Structured frontmatter queries, neighbor… |
 | `wiki-import` | `<source-path> [--format=folder\|obsidian\|notion\|confluence\|markdown] [--map=<mapping-file>] [--dry-run] [--resume] [--priority=recency\|links\|manual] [--set=key=value,...] [--per-file-prompt]` | Import an existing document system (folder tree, Obsidian vault, Notion/Confluence export, etc.) in… |
-| `wiki-ingest` | `<url\|file\|text> [--batch] [--no-discuss] [--no-images] [--set=key=value,...]` | Ingest a source into the wiki: save raw content and referenced images, prompt the user for any cust… |
+| `wiki-ingest` | `<url\|file\|text> [--batch] [--no-discuss] [--no-images] [--no-spec-preflight] [--set=key=value,...]` | Ingest a source into the wiki: save raw content and referenced images, prompt the user for any cust… |
 | `wiki-init` | `[--path=~/wiki] [--domain='AI research'] [--categories='a,b,c'] [--non-interactive] [--set-tags='a,b,c'] [--set-active-days=N] [--set-archived-days=N] [--set-driving-field=published_at\|ingested_at] [--set-dimension='name:type:required:refresh_on'] [--enable-dreaming] [--enable-sync] [--refresh-id [--force]]` | Interactive bootstrap for a new LLM wiki: ask about domain, propose categories that fit, write a cu… |
 | `wiki-lint` | `[--fix] [--report-only] [--check=orphans\|links\|frontmatter\|stale\|index\|tags\|size\|gaps\|schema\|tiers\|dimensions]` | Health-check the wiki: structural checks (orphans, broken links, frontmatter, stale content, tier c… |
 | `wiki-query` | `<question> [--file] [--format=markdown\|table\|slides\|chart\|canvas] [--tier=active\|all\|archived\|frozen] [--external] [--no-external] [--auto-external]` | Answer a question using the wiki's compiled knowledge. Searches relevant pages, synthesizes with ci… |
