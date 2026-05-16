@@ -112,6 +112,11 @@
       "type": "array",
       "items": { "$ref": "#/$defs/external_plugin" }
     },
+    "external_sources": {
+      "type": "array",
+      "description": "v1.13 Phase 1+. Read-only directory-style external sources, used primarily for spec preflight backfill when adopting kata mid-project. Distinct from `external_plugins` (which executes CLI tools for query fallback); external_sources just enumerates existing markdown files on disk. URI scheme: external://<name>/<path-relative-to-root>.",
+      "items": { "$ref": "#/$defs/external_source" }
+    },
     "sync": {
       "type": "object",
       "additionalProperties": false,
@@ -224,6 +229,60 @@
           "type": "integer",
           "minimum": 1,
           "default": 60
+        }
+      }
+    },
+    "external_source": {
+      "type": "object",
+      "required": ["name", "type", "root"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Source identifier. Used in URI scheme: external://<name>/<path>."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["directory"],
+          "description": "Phase 1 supports only `directory` (point at a filesystem path containing markdown files). Future phases may add `git-remote`, `http-archive`, etc."
+        },
+        "root": {
+          "type": "string",
+          "description": "Absolute or ~-prefixed path to the source directory. Read-only: kata never modifies content under this path."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description for diagnostics + audit. Optional."
+        },
+        "treatment": {
+          "type": "string",
+          "enum": ["active", "raw", "frozen"],
+          "default": "raw",
+          "description": "active = participate in default wiki-search / wiki-query like a kata wiki node; raw = excluded from default queries but included in spec_preflight scans (default — appropriate for historical spec corpus); frozen = excluded everywhere unless --include-frozen-external flag explicitly set."
+        },
+        "discover": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How to find spec-bearing files under root.",
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "default": "**/*.md",
+              "description": "Glob pattern relative to root."
+            },
+            "type_field": {
+              "type": "string",
+              "default": "type",
+              "description": "Frontmatter key whose value is matched against spec_authoring.spec_types. Override when external corpus uses a non-standard frontmatter convention (e.g. `category` or `doc_type`)."
+            },
+            "exclude": {
+              "type": "array",
+              "items": { "type": "string" },
+              "default": [],
+              "description": "Glob patterns to exclude (e.g. `drafts/**`, `**/archived/**`)."
+            }
+          }
         }
       }
     },

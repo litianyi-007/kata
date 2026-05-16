@@ -4,6 +4,101 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.3.0] — 2026-05-16 — v1.13 SHM Phase 1: external source backfill
+
+**Extends Phase 0** (v2.2.0) so a kata adoption in the middle of an
+existing SDD-style project can scan a pre-existing spec corpus without
+bulk-importing every old spec. The historical corpus stays on disk
+where it is; kata enumerates it for preflight only.
+
+### New
+
+- **`.wiki-plugins.yaml` `external_sources:` array** — separate from
+  v1.10's `external_plugins:` (which executes CLI tools for query
+  fallback). Each `external_sources` entry has:
+  - `name`: identifier for the URI scheme (`external://<name>/<path>`)
+  - `type`: `directory` (Phase 1 only; future phases may add git-remote)
+  - `root`: absolute or `~`-prefixed path to the directory
+  - `treatment`: `active | raw | frozen` (default `raw`)
+  - `description`: optional human-readable label
+  - `discover.type_field`: frontmatter key holding the type (default
+    `type`; override for corpora using `category` or `doc_type`)
+  - `discover.exclude`: substring patterns to skip (e.g. `drafts/`)
+- **Treatment semantics**:
+  - `active` — participates in default wiki-search + spec preflight
+  - `raw` — excluded from default search, included in spec preflight
+    (the right choice for most historical-corpus adoptions)
+  - `frozen` — excluded everywhere unless `--include-frozen-external`
+- **URI scheme `external://<source>/<path>`** for cross-source
+  references in `spec_relationships:` targets. Phase 3 auto-propagation
+  will skip these (kata cannot edit external pages); Phase 3 will
+  instead write a kata-internal reverse-index file.
+- **`plugin/scripts/spec_preflight.py`** extended with:
+  - `_load_external_sources(wiki_root)` — reads
+    `.wiki-plugins.yaml`'s `external_sources` block
+  - `_enumerate_external_pages(source, spec_types_set)` — walks the
+    source's `root` directory, filters by frontmatter type, returns
+    page records (path, uri, title, type, tags, body, source, treatment)
+  - External-candidate scoring loop in `main()` (uses the same
+    heuristics as kata-side: title overlap, tag overlap, wikilink
+    reference, type match; sets `hub_score=0` and adds `-0.5`
+    authority penalty for external)
+- **CLI flags**: `--no-external` (skip external entirely),
+  `--include-frozen-external` (also scan frozen-treatment sources).
+- **JSON output additions**:
+  - `external_sources_scanned`: per-source diagnostic
+    (name, treatment, page_count, scored_count, elapsed_ms)
+  - `external_skipped`: sources excluded by treatment filter
+  - `tier_breakdown.external`: count of external candidates
+  - `candidates[].source` / `source_treatment` / `writeable: false` /
+    `fs_path` on external candidates only
+
+### Changed
+
+- `wiki-spec` skill argument-hint extended with `--no-external` +
+  `--include-frozen-external`
+- `wiki-spec` SKILL.md Phase scope updated (Phase 0+1 → advisory;
+  Phase 2 → enforcement; Phase 3 → auto-propagation)
+- Root `SKILL.md` frontmatter description: "Phase 0" → "Phase 0+1 —
+  wiki + external-source backfill via .wiki-plugins.yaml"
+- `schema/wiki-schema.json`: new top-level array `external_sources`
+  + new `$defs/external_source` definition
+
+### Validation
+
+`tests/run_smoke.py` Test 21 validates Phase 1 end-to-end:
+- Builds fixture with 1 kata-managed spec + 2 external specs (and 1
+  non-spec README that should be filtered out)
+- Configures `.wiki-plugins.yaml` with `external_sources` entry,
+  `treatment: raw`
+- Runs preflight against a new draft that link-references the F011
+  external spec and shares tags with both
+- Asserts: phase=1, `external_sources_scanned` populated correctly,
+  F011 surfaces as external candidate with `writeable: false`, URI
+  scheme `external://sdd-specs/...`, signals correct
+- Asserts: `--no-external` suppresses external enumeration entirely
+
+### Migration
+
+`external_sources` is additive. Existing `external_plugins` (v1.10
+query-fallback CLI tools) continue to work unchanged — they're a
+different array. Wikis without `external_sources` block behave
+exactly as v2.2.0.
+
+To enable Phase 1 backfill of a historical corpus:
+
+```yaml
+# In wiki's .wiki-plugins.yaml
+external_sources:
+  - name: legacy-specs
+    type: directory
+    root: ~/work/myproject/docs/specs
+    treatment: raw
+```
+
+Then `wiki-spec preflight --new-spec <draft>` will surface candidates
+from both the kata wiki AND the legacy directory.
+
 ## [2.2.0] — 2026-05-16 — v1.13 SHM (Spec History Management) Phase 0
 
 **New optional skill: `wiki-spec`**. First phase of a multi-phase feature

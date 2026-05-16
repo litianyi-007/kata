@@ -2275,6 +2275,136 @@ exit 0
     print("  ok  spec_preflight ranks linked + tag-overlapping prior spec "
           "first; advisory text + tier breakdown present")
 
+    print("\nTest 21: v1.13 SHM Phase 1 — external source backfill in "
+          "spec_preflight")
+    # Build a fixture: kata wiki + an external dir of spec files + a new draft
+    # that overlaps both. The external dir simulates a 6-month historical
+    # SDD corpus that kata is being introduced to mid-project.
+    ext_wiki = FIXTURE.parent / "_spec_phase1_kata"
+    ext_dir = FIXTURE.parent / "_spec_phase1_external"
+    for d in (ext_wiki, ext_dir):
+        if d.exists():
+            _windows_safe_rmtree(d)
+    (ext_wiki / "decisions").mkdir(parents=True)
+    (ext_wiki / "raw").mkdir()
+    ext_dir.mkdir(parents=True)
+
+    (ext_wiki / "SCHEMA.md").write_text(
+        "## Domain\nfixture\n\n## Categories\n\n```yaml\ncategories:\n"
+        "  - name: decisions\n    purpose: \"decisions content\"\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 365\n  archived_days: 730\n"
+        "  driving_field: published_at\n```\n",
+        encoding="utf-8")
+    (ext_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (ext_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+
+    # One kata-managed spec (will show up as active tier)
+    (ext_wiki / "decisions" / "kata-auth-spec.md").write_text(
+        "---\ntitle: \"Kata auth spec (refactor side)\"\n"
+        "type: decisions\n"
+        "tags: [auth, refactor]\n"
+        "published_at: 2026-05-10\n---\n\n"
+        "# Kata auth refactor — wiki-managed side.\n",
+        encoding="utf-8")
+
+    # Two external-source spec files (representing a pre-kata SDD corpus)
+    (ext_dir / "F011-old-merge-back.md").write_text(
+        "---\ntitle: \"F011 merge-back lane discipline\"\n"
+        "type: decisions\n"
+        "tags: [auth, security, merge-back, refactor]\n---\n\n"
+        "# F011 merge-back (pre-kata SDD).\n",
+        encoding="utf-8")
+    (ext_dir / "F008-old-tenants.md").write_text(
+        "---\ntitle: \"F008 implicit tenants\"\n"
+        "type: decisions\n"
+        "tags: [tenants, auth]\n---\n\n"
+        "# F008 (pre-kata SDD).\n",
+        encoding="utf-8")
+    # A non-spec file in the external dir — should be filtered out
+    (ext_dir / "README.md").write_text(
+        "---\ntitle: README\ntype: documentation\ntags: []\n---\n"
+        "# Not a spec.\n", encoding="utf-8")
+
+    # Configure .wiki-plugins.yaml — Python-resolvable absolute path
+    # (Posix-style ok; both Python on Windows + Linux handle it)
+    plugins_yaml = (
+        f"external_sources:\n"
+        f"  - name: sdd-specs\n"
+        f"    type: directory\n"
+        f"    root: {ext_dir.as_posix()}\n"
+        f"    treatment: raw\n"
+        f"    discover:\n"
+        f"      type_field: type\n"
+    )
+    (ext_wiki / ".wiki-plugins.yaml").write_text(plugins_yaml, encoding="utf-8")
+
+    # New draft spec — overlaps strongly with F011 (auth, refactor) AND the
+    # kata-managed auth spec. Includes a wikilink to F011 for the explicit
+    # signal.
+    new_draft = ext_wiki / "raw" / "draft-auth-token-spec.md"
+    new_draft.parent.mkdir(parents=True, exist_ok=True)
+    new_draft.write_text(
+        "---\ntitle: \"Spec D — auth token refactor (refines F011)\"\n"
+        "type: decisions\n"
+        "tags: [auth, refactor, security, jwt]\n---\n\n"
+        "# Spec D\n\nThis refines [[F011-old-merge-back]] from SDD era.\n",
+        encoding="utf-8")
+
+    pf = run([str(SCRIPTS / "spec_preflight.py"),
+              "--wiki", str(ext_wiki),
+              "--new-spec", str(new_draft),
+              "--include-archived"])
+
+    assert_eq("Phase 1 phase marker", pf["phase"], 1)
+
+    # external_sources_scanned diagnostic populated
+    assert "external_sources_scanned" in pf
+    assert len(pf["external_sources_scanned"]) == 1, \
+        f"expected 1 external source diag; got {pf['external_sources_scanned']}"
+    src_diag = pf["external_sources_scanned"][0]
+    assert_eq("external source name", src_diag["name"], "sdd-specs")
+    assert_eq("external source treatment", src_diag["treatment"], "raw")
+    # We have 2 spec-type files + 1 non-spec README in ext_dir; only 2 enumerated
+    assert_ge("external source page_count (≥2 specs)", src_diag["page_count"], 2)
+
+    # Tier breakdown should include external counts
+    assert "external" in pf["tier_breakdown"], \
+        f"tier_breakdown should include 'external' key; got {pf['tier_breakdown']}"
+    assert_ge("external candidates scored", pf["tier_breakdown"]["external"], 1)
+
+    # F011 should appear as an external candidate (link_reference + tag overlap)
+    f011 = next((c for c in pf["candidates"]
+                 if c.get("source") == "sdd-specs"
+                 and "F011" in c["path"]), None)
+    assert f011 is not None, \
+        f"F011 external candidate missing; candidates: {[c['path'] for c in pf['candidates']]}"
+    assert_eq("F011 tier label", f011["tier"], "external")
+    assert_eq("F011 writeable false", f011["writeable"], False)
+    assert_eq("F011 source_treatment", f011["source_treatment"], "raw")
+    assert f011["signals"]["link_reference"], \
+        f"F011 should have link_reference=True; got {f011['signals']}"
+    assert f011["signals"]["tag_overlap"] >= 3, \
+        f"F011 tag_overlap should be ≥3; got {f011['signals']}"
+
+    # URI scheme uses external://<source>/<path>
+    assert f011["path"].startswith("external://sdd-specs/"), \
+        f"external URI scheme wrong; got {f011['path']}"
+
+    print("  ok  external source scanned, F011 surfaced with writeable=False, "
+          "URI scheme external://sdd-specs/..., signals correct")
+
+    # Verify --no-external suppresses external scanning
+    pf2 = run([str(SCRIPTS / "spec_preflight.py"),
+               "--wiki", str(ext_wiki),
+               "--new-spec", str(new_draft),
+               "--no-external"])
+    assert pf2["external_sources_scanned"] == [], \
+        f"--no-external should suppress scan; got {pf2['external_sources_scanned']}"
+    assert pf2["tier_breakdown"]["external"] == 0, \
+        f"external tier count should be 0 under --no-external"
+    print("  ok  --no-external flag suppresses external enumeration")
+
     print("\nAll smoke tests passed.")
     return 0
 
