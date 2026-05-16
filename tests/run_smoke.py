@@ -2196,6 +2196,85 @@ exit 0
         "plugin/AGENTS should clarify that AGENTS.md is not the skill registry"
     print("  ok  docs now describe the corrected Codex installation path")
 
+    print("\nTest 20: v1.13 SHM Phase 0 — spec_preflight surfaces "
+          "related prior specs")
+    # Build a tiny spec-bearing wiki under the existing fixture tree
+    spec_wiki = FIXTURE.parent / "_spec_preflight"
+    if spec_wiki.exists():
+        _windows_safe_rmtree(spec_wiki)
+    (spec_wiki / "decisions").mkdir(parents=True)
+    (spec_wiki / "raw").mkdir()
+    (spec_wiki / "SCHEMA.md").write_text(
+        "## Domain\nfixture\n\n## Categories\n\n```yaml\ncategories:\n"
+        "  - name: decisions\n    purpose: \"decisions content\"\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 365\n  archived_days: 730\n"
+        "  driving_field: published_at\n```\n",
+        encoding="utf-8")
+    (spec_wiki / "index.md").write_text("# Wiki Index\n", encoding="utf-8")
+    (spec_wiki / "log.md").write_text("# Wiki Log\n", encoding="utf-8")
+
+    # Two prior decisions in the wiki — different relatedness profiles
+    (spec_wiki / "decisions" / "spec-A.md").write_text(
+        "---\ntitle: \"Spec A — auth refactor\"\n"
+        "type: decisions\n"
+        "tags: [auth, refactor, security]\n"
+        "published_at: 2026-05-01\n---\n\n"
+        "# Spec A\n\nWe move auth into a separate service.\n",
+        encoding="utf-8")
+    (spec_wiki / "decisions" / "spec-B.md").write_text(
+        "---\ntitle: \"Spec B — logging schema\"\n"
+        "type: decisions\n"
+        "tags: [logging, observability]\n"
+        "published_at: 2026-05-05\n---\n\n"
+        "# Spec B\n\nNew log fields.\n",
+        encoding="utf-8")
+
+    # New spec — overlaps strongly with spec-A (auth, refactor tags)
+    new_spec = spec_wiki / "raw" / "draft-spec-C.md"
+    new_spec.parent.mkdir(parents=True, exist_ok=True)
+    new_spec.write_text(
+        "---\ntitle: \"Spec C — auth token refactor (refines A)\"\n"
+        "type: decisions\n"
+        "tags: [auth, refactor, security, jwt]\n---\n\n"
+        "# Spec C\n\nRefine [[spec-A]] with JWT token boundary.\n",
+        encoding="utf-8")
+
+    pf = run([str(SCRIPTS / "spec_preflight.py"),
+              "--wiki", str(spec_wiki),
+              "--new-spec", str(new_spec),
+              "--include-archived"])
+    assert_eq("spec_preflight new_spec_type", pf["new_spec_type"], "decisions")
+    assert_ge("candidates_found ≥ 1", pf["candidates_found"], 1)
+
+    # Spec A should rank above Spec B (more tag overlap + wikilink reference)
+    paths = [c["path"] for c in pf["candidates"]]
+    spec_a_idx = next((i for i, p in enumerate(paths) if "spec-A" in p), -1)
+    spec_b_idx = next((i for i, p in enumerate(paths) if "spec-B" in p), -1)
+    assert spec_a_idx == 0, \
+        f"spec-A should rank first; got order {paths}"
+
+    # Spec A signals: link_reference=True, title_overlap=2 (auth + refactor),
+    # tag_overlap=3 (auth, refactor, security), type_match=True
+    spec_a = pf["candidates"][spec_a_idx]
+    assert spec_a["signals"]["link_reference"], \
+        f"spec-A should be link_reference=True; got {spec_a['signals']}"
+    assert spec_a["signals"]["type_match"], \
+        f"spec-A should be type_match=True; got {spec_a['signals']}"
+    assert spec_a["signals"]["tag_overlap"] >= 3, \
+        f"spec-A tag_overlap should be ≥3; got {spec_a['signals']}"
+
+    # Advisory phrasing must be present so future agents know it's not enforced
+    assert "advisory" in pf and "Phase 0" in pf["advisory"], \
+        "Phase 0 advisory text must be present"
+
+    # Tier breakdown sanity (both fixture specs are active by date)
+    assert pf["tier_breakdown"]["active"] >= 2, \
+        f"expected ≥2 active spec candidates; got {pf['tier_breakdown']}"
+
+    print("  ok  spec_preflight ranks linked + tag-overlapping prior spec "
+          "first; advisory text + tier breakdown present")
+
     print("\nAll smoke tests passed.")
     return 0
 

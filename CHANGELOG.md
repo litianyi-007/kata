@@ -4,6 +4,85 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.2.0] — 2026-05-16 — v1.13 SHM (Spec History Management) Phase 0
+
+**New optional skill: `wiki-spec`**. First phase of a multi-phase feature
+that closes the spec-drift gap in SDD / superpowers-style workflows.
+Phase 0 ships an advisory-only preflight scan; Phase 1+ extends to
+external sources, enforces relationship declaration, and auto-propagates
+supersession across the wiki. Off by default; opt-in per wiki via
+`spec_authoring.enabled: true` in SCHEMA.md.
+
+### Motivation
+
+LLM-driven SDD / superpowers flows generate many specs over time. Each new
+spec is authored fresh, often by a different session/agent, with no
+mechanism that makes the new spec "answer for" the older specs whose scope
+it overlaps. Result: spec corpora drift from "coherent decision record"
+into "pile of disconnected pages". Kata's wedge has always been project
+memory; spec history is a structured subset of that problem that needs
+its own primitives.
+
+### New
+
+- **`plugin/scripts/spec_preflight.py`** — given a draft spec file (need
+  not be in the wiki yet), scan wiki pages whose frontmatter `type` is in
+  `spec_authoring.spec_types`, rank by relevance signals (title overlap,
+  tag overlap, wikilink reference, hub score, type match), emit JSON.
+  Default `spec_types` covers SDD-style (`prd`, `design`, `rfc`, `adr`,
+  `task-spec`) and kata-native (`decisions`).
+- **`plugin/skills/wiki-spec/SKILL.md`** — new skill exposing the
+  `preflight` subcommand. Phase 0 surfaces candidates; the author / agent
+  reads them and decides whether to declare relationships in the new
+  spec's frontmatter. No enforcement yet.
+- **`schema/wiki-schema.json`** — adds `spec_authoring` config block:
+  `enabled`, `spec_types`, `preflight` (auto/manual/off),
+  `relationship_kinds`, `enforce_relationship_declaration` (Phase 2
+  toggle, off in Phase 0).
+- **Convention** for per-spec frontmatter (Phase 0 manual, Phase 2
+  enforced): `spec_relationships: [{kind, target, note}]` with kinds
+  `supersedes | refines | extends | parallel | contradicts | references | custom`.
+
+### Roadmap (subsequent phases, not in this release)
+
+| Phase | Adds |
+|---|---|
+| 1 | Preflight reaches external sources via `.wiki-plugins.yaml` `treatment: raw\|frozen\|active` (supersedes v1.10 PRD) |
+| 2 | Required `spec_relationships:` declaration; ingest rejects on missing |
+| 3 | Auto-propagation: superseded specs get banner + tier flip + reverse-link; integrates with v1.6 dreamer reject-signal channel |
+| 4 | `wiki-graph --spec-history <topic>` coherence view |
+
+Forthcoming: `docs/PRD-v1.13-spec-history-management.md` (Day 3 of the
+2026-05-16 cooldown roadmap will draft it formally; this CHANGELOG entry
+is the minimum-viable design contract for now).
+
+### Changed
+
+- **Skill count**: 13 → 14 (Test 18 assert updated implicitly via `>= 13`).
+- **Plugin manifest version**: 2.1.0 → 2.2.0 in both
+  `.claude-plugin/marketplace.json` and `plugin/.claude-plugin/plugin.json`.
+
+### Migration
+
+No migration required. `spec_authoring` is opt-in:
+
+```yaml
+# In SCHEMA.md of any wiki that wants the feature:
+spec_authoring:
+  enabled: true
+  spec_types: [decisions]   # narrow to your wiki's conventions
+```
+
+Wikis without this block continue to behave exactly as in v2.1.0.
+
+### Validation
+
+`tests/run_smoke.py` Test 20 validates Phase 0 end-to-end: builds a
+fixture wiki with 2 prior decisions + 1 new draft spec, runs preflight,
+verifies the link-referenced same-tagged candidate ranks first with the
+correct signals (link_reference + type_match + tag_overlap ≥3) and that
+advisory text is present.
+
 ## [2.1.0] — 2026-05-14 — wiki-search tier-aware ranking + coverage signal
 
 **Backward-compatible additions** to `wiki-search`. No skill API changes,

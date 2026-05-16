@@ -132,6 +132,7 @@ confirmation. See `PLUGINS.md` (or the `wiki-query` skill) for the full spec.
 | `wiki-lint` | `[--fix] [--report-only] [--check=orphans\|links\|frontmatter\|stale\|index\|tags\|size\|gaps\|schema\|tiers\|dimensions]` | Health-check the wiki: structural checks (orphans, broken links, frontmatter, stale content, tier c… |
 | `wiki-query` | `<question> [--file] [--format=markdown\|table\|slides\|chart\|canvas] [--tier=active\|all\|archived\|frozen] [--external] [--no-external] [--auto-external]` | Answer a question using the wiki's compiled knowledge. Searches relevant pages, synthesizes with ci… |
 | `wiki-search` | `<query> [--tag=<tag>] [--type=entity\|concept\|comparison\|query] [--limit=10] [--tier=active\|all\|archived\|frozen]` | Search the wiki by keyword, tag, topic, or type. Returns ranked results with page summaries and mat… |
+| `wiki-spec` | `preflight --new-spec <path> [--wiki=<path>] [--limit=10] [--include-archived]` | Spec history management. Before authoring a new spec (PRD / design / RFC / ADR / task-spec / decisi… |
 | `wiki-sync` | `[--auto] [--dry-run]` | Multi-machine git sync for the wiki: pull, merge with custom drivers (log.md union+sort), push. Loc… |
 | `wiki-tier` | `[--show] [--set-active=Nd] [--set-archived=Nd] [--set-field=published_at\|ingested_at] [--preview] [--pin=<page>:<tier>] [--unpin=<page>] [--list=<tier>] [--disable] [--enable]` | Inspect and manage the memory-tier system: view the active/archived/frozen distribution, preview a… |
 | `wiki-watch` | `[--start [--poll N --debounce N]] [--stop] [--status] [--drain [--pages 1,2,3]] [--remove <id>]` | Watch raw/{articles,papers,transcripts,external}/ for new files, queue them, and let the user drain… |
@@ -538,6 +539,63 @@ the recovery commands using stash SHA (not `stash@{0}` which can drift).
 - Push-race retry: bounded at 4 total attempts (1s/2s/4s backoff). Each
   retry re-fetches, re-classifies, and re-merges with the driver if the
   ancestry is still divergent. Out-of-retries → `race-exhausted`.
+
+---
+
+### wiki-spec (spec history management — v1.13+, Phase 0)
+**Trigger:** "before authoring a new spec", "what prior specs relate to X", "any decisions overlapping this PRD draft"
+
+**Arguments:** `preflight --new-spec <path>`, `[--wiki=<path>]`, `[--limit=N]`, `[--include-archived]`
+
+Spec-aware authoring helper. SDD / superpowers-style flows generate many
+specs over time; new specs frequently overlap, refine, or override older
+ones, but most tools have no mechanism to make the new-spec author "answer
+for" the older specs. `wiki-spec preflight` scans the wiki for related prior
+specs (by tag overlap, title overlap, explicit wikilinks, hub centrality)
+and surfaces them so the author can declare relationships before ingest.
+
+**Phase 0 scope** (current):
+- Preflight scan over **kata-managed pages** with `frontmatter.type` in
+  `spec_authoring.spec_types` (default includes `decisions`, `prd`,
+  `design`, `rfc`, `adr`, `task-spec`)
+- Advisory output (JSON) — the author / agent reads candidates and decides
+  whether to declare relationships in `spec_relationships:` frontmatter
+- **No enforcement, no auto-propagation, no external sources** yet
+
+**Roadmap (subsequent phases):**
+- Phase 1 — extend preflight to `.wiki-plugins.yaml` external sources
+  (`treatment: raw|frozen|active`) so a kata adoption can scan a 6-month
+  historical SDD corpus without bulk-importing it
+- Phase 2 — enforce `spec_relationships:` declaration; ingest rejects on
+  missing relationship for above-threshold candidates
+- Phase 3 — auto-propagation: superseded specs get banner + tier flip +
+  reverse-link; integrates with v1.6 dreamer as a reject signal
+- Phase 4 — `wiki-graph --spec-history <topic>` coherence view
+
+**Configuration in SCHEMA.md** (all fields optional; defaults are sensible):
+
+```yaml
+spec_authoring:
+  enabled: true
+  spec_types: [decisions, prd, design, rfc, adr, task-spec]
+  preflight: auto
+  relationship_kinds: [supersedes, refines, extends, parallel, contradicts]
+  enforce_relationship_declaration: false   # Phase 2 toggle
+```
+
+Per-spec frontmatter convention (Phase 0 manual, Phase 2 enforced):
+
+```yaml
+spec_relationships:
+  - kind: supersedes
+    target: decisions/F015-old-spec.md
+    note: "F015's scope absorbed; F015 should be archived"
+  - kind: extends
+    target: decisions/F011-merge-back.md
+```
+
+See `plugin/skills/wiki-spec/SKILL.md` for the full per-phase contract and
+`docs/PRD-v1.13-spec-history-management.md` (forthcoming) for design.
 
 ---
 

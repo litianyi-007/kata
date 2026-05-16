@@ -226,6 +226,44 @@
           "default": 60
         }
       }
+    },
+    "spec_authoring": {
+      "type": "object",
+      "description": "v1.13 SHM (Spec History Management) config. When a new spec is authored, kata can run a preflight scan to surface related prior specs so the author declares relationships before ingest. Phase 0 is advisory only; later phases add enforcement and auto-propagation. See docs/PRD-v1.13-spec-history-management.md.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Off by default — opt-in per wiki. Set true to enable spec preflight on ingest of files whose frontmatter `type` matches spec_types."
+        },
+        "spec_types": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["prd", "design", "rfc", "adr", "task-spec", "decisions"],
+          "description": "Frontmatter `type` values that trigger spec preflight on ingest. Override per wiki to match local conventions (e.g. ['decisions'] for kata-native wikis or ['prd','rfc'] for SDD-style flows)."
+        },
+        "preflight": {
+          "type": "string",
+          "enum": ["auto", "manual", "off"],
+          "default": "auto",
+          "description": "auto = scan automatically when frontmatter type matches; manual = scan only on explicit --spec-mode flag; off = never scan."
+        },
+        "relationship_kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["supersedes", "refines", "extends", "parallel", "contradicts", "references", "custom"]
+          },
+          "default": ["supersedes", "refines", "extends", "parallel", "contradicts"],
+          "description": "Allowed values for the `kind` field of `spec_relationships` entries in spec frontmatter. Phase 2 will reject ingest if a relationship uses a kind not in this list."
+        },
+        "enforce_relationship_declaration": {
+          "type": "boolean",
+          "default": false,
+          "description": "Phase 2 toggle. When true, ingest of a spec-type page is rejected if any preflight candidate above score-threshold is not addressed in spec_relationships."
+        }
+      }
     }
   }
 }

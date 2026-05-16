@@ -1,7 +1,7 @@
 {
   "name": "kata",
-  "version": "2.1.0",
-  "description": "A self-evolving knowledge system for AI-paired builders. Built on Karpathy's LLM-Wiki principle, the CORE is a self-closing ingest/synthesis loop + auto-dreaming that resurfaces frozen pages when their relevance returns. Phase 1 reach (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. Builders inherit a kata, adapt it to their project, transcend the form. 13 skills (init, import, ingest, search, graph, tier, digest, query, lint, config, dream, watch, sync). Multi-CLI session ingest in flight (v1.11).",
+  "version": "2.2.0",
+  "description": "A self-evolving knowledge system for AI-paired builders. Built on Karpathy's LLM-Wiki principle, the CORE is a self-closing ingest/synthesis loop + auto-dreaming that resurfaces frozen pages when their relevance returns. Phase 1 reach (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. Builders inherit a kata, adapt it to their project, transcend the form. 14 skills (init, import, ingest, search, graph, tier, digest, query, lint, config, dream, watch, sync, spec). Spec History Management (v1.13) in Phase 0. Multi-CLI session ingest in flight (v1.11).",
   "author": {
     "name": "surebeli",
     "url": "https://github.com/surebeli"
