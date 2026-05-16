@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Spec preflight scan — v1.13 SHM Phase 0 + Phase 1.
+"""Spec preflight scan — v1.13 SHM Phase 0 + Phase 1 + Phase 2.
 
 When a new spec is about to be authored / ingested, scan kata-managed
 pages AND configured external sources for related prior specs (by tag
@@ -11,15 +11,22 @@ Phase 0 (shipped 2026-05-16, v2.2.0):
 - Scan kata-managed wiki pages whose frontmatter `type` ∈ spec_types
 - Advisory only — no enforcement, no auto-propagation
 
-Phase 1 (this version):
+Phase 1 (shipped 2026-05-16, v2.3.0):
 - Scan external sources via `.wiki-plugins.yaml` `external_sources` array
 - `treatment: active|raw|frozen` controls default scope
 - URI scheme `external://<source-name>/<path>` for external relationship targets
 - External candidates are flagged `writeable: false` — Phase 3
   auto-propagation will skip them
 
-Phase 2+ (future):
-- Enforced relationship declaration (Phase 2)
+Phase 2 (this version, v2.4.0):
+- `--enforce` mode parses the new spec's `spec_relationships:` block
+  and rejects ingest when above-threshold candidates are not addressed.
+- Threshold + mode (strict|confirm) sourced from `spec_authoring`
+  in SCHEMA.md; CLI flags override per-invocation.
+- Exit codes: 0 covered/no enforcement, 1 uncovered+confirm-mode,
+  2 uncovered+strict-mode (or general failure).
+
+Phase 3+ (future):
 - Auto-propagation of supersedes / refines (Phase 3)
 - Lineage view via wiki-graph --spec-history (Phase 4)
 
@@ -36,6 +43,9 @@ Usage:
     spec_preflight.py --new-spec <path> --include-archived
     spec_preflight.py --new-spec <path> --no-external
     spec_preflight.py --new-spec <path> --include-frozen-external
+    spec_preflight.py --new-spec <path> --enforce
+    spec_preflight.py --new-spec <path> --enforce --enforce-threshold 4.0
+    spec_preflight.py --new-spec <path> --enforce --enforce-mode confirm
 
 The new spec file need not exist in the wiki yet — typically it's a
 draft sitting in raw/ or a separate working directory. The script
@@ -167,6 +177,76 @@ def _enumerate_external_pages(source: dict, spec_types_set: set[str]) -> list[di
     return pages
 
 
+def _normalize_target(s: str) -> str:
+    """Reduce a relationship target string to a canonical match key.
+
+    Strips wikilink brackets, trailing `.md`, surrounding whitespace, and
+    lowercases. The same normalization is applied to both declared
+    targets (from spec_relationships[].target) and candidate identifiers
+    (kata page path, or external URI), so equality compares apples to
+    apples.
+    """
+    if not s:
+        return ""
+    t = str(s).strip()
+    # [[wikilink]] → wikilink
+    if t.startswith("[[") and t.endswith("]]"):
+        t = t[2:-2].strip()
+    # foo|alias-display → foo (Obsidian aliased wikilink)
+    if "|" in t:
+        t = t.split("|", 1)[0].strip()
+    # Trailing .md (case-insensitive)
+    if t.lower().endswith(".md"):
+        t = t[:-3]
+    return t.lower()
+
+
+def _candidate_match_keys(candidate: dict) -> set[str]:
+    """Return the set of normalized strings that should match a declared
+    target for this candidate. Includes both full path/URI and bare stem
+    so authors can use either form."""
+    keys: set[str] = set()
+    # Kata candidate: `path` is wiki-relative posix
+    # External candidate: `path` is external://<source>/<rel>
+    full = candidate.get("path") or ""
+    keys.add(_normalize_target(full))
+    # Stem-only match (last path segment)
+    if "://" in full:
+        # external://name/sub/dir/file.md → file
+        tail = full.split("://", 1)[1]
+        stem = tail.split("/")[-1] if "/" in tail else tail
+    else:
+        stem = full.split("/")[-1] if "/" in full else full
+    keys.add(_normalize_target(stem))
+    keys.discard("")
+    return keys
+
+
+def _parse_spec_relationships(new_fm: dict) -> list[dict]:
+    """Pull `spec_relationships:` out of the new-spec frontmatter, return
+    a list of dicts with `kind`, `target`, `note` keys. Malformed
+    entries (non-dict, missing target) are dropped silently — the
+    advisory output captures the declaration count so callers can audit.
+    """
+    raw = new_fm.get("spec_relationships") or []
+    if not isinstance(raw, list):
+        return []
+    out: list[dict] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        target = entry.get("target")
+        if not target:
+            continue
+        out.append({
+            "kind": str(entry.get("kind", "references")),
+            "target": str(target),
+            "note": str(entry.get("note", "")),
+            "_normalized": _normalize_target(str(target)),
+        })
+    return out
+
+
 def main() -> int:
     p = argparse.ArgumentParser(
         description="Spec preflight scan: list prior specs related to a new "
@@ -194,6 +274,17 @@ def main() -> int:
     p.add_argument("--include-frozen-external", action="store_true",
                    help="Also scan external sources with treatment=frozen "
                         "(default: only active+raw treatments).")
+    p.add_argument("--enforce", action="store_true",
+                   help="Phase 2 enforcement mode. Parse the new spec's "
+                        "`spec_relationships:` frontmatter and reject ingest "
+                        "when any above-threshold candidate is not addressed. "
+                        "Exit code 2 (strict) or 1 (confirm) on uncovered.")
+    p.add_argument("--enforce-threshold", type=float, default=None,
+                   help="Override `spec_authoring.enforcement_score_threshold` "
+                        "for this run. Default: schema value (5.0 fallback).")
+    p.add_argument("--enforce-mode", choices=["strict", "confirm"], default=None,
+                   help="Override `spec_authoring.enforcement_mode` for this "
+                        "run. strict=exit 2 on uncovered; confirm=exit 1.")
     args = p.parse_args()
 
     # Read the new spec file
@@ -435,6 +526,10 @@ def main() -> int:
 
     # Rank: highest score first; stable tiebreak by path
     results.sort(key=lambda r: (-r["score"], r["path"]))
+
+    # Keep the unbounded set for Phase 2 enforcement — a low --limit
+    # must not hide above-threshold candidates from the coverage check.
+    full_results = list(results)
     results = results[:args.limit]
 
     # Tier breakdown across full candidate pool (before --limit) for the
@@ -450,7 +545,74 @@ def main() -> int:
 
     phase = 1 if external_sources_scanned or external_skipped or not args.no_external else 0
 
-    emit({
+    # Phase 2: enforcement check.
+    # Active when --enforce is passed OR schema's
+    # `spec_authoring.enforce_relationship_declaration` is true.
+    schema_enforce = bool(spec_authoring.get("enforce_relationship_declaration", False))
+    enforcement_active = bool(args.enforce) or schema_enforce
+
+    enforcement_block: dict | None = None
+    exit_code = 0
+    if enforcement_active:
+        threshold = (
+            args.enforce_threshold
+            if args.enforce_threshold is not None
+            else float(spec_authoring.get("enforcement_score_threshold", 5.0))
+        )
+        mode = (
+            args.enforce_mode
+            or str(spec_authoring.get("enforcement_mode", "strict"))
+        )
+        if mode not in ("strict", "confirm"):
+            mode = "strict"
+        phase = 2
+
+        declared = _parse_spec_relationships(new_fm)
+        declared_normalized = {d["_normalized"] for d in declared if d["_normalized"]}
+
+        above_threshold = [r for r in full_results if r["score"] >= threshold]
+        covered: list[dict] = []
+        uncovered: list[dict] = []
+        for cand in above_threshold:
+            keys = _candidate_match_keys(cand)
+            is_covered = bool(keys & declared_normalized)
+            target = dict(cand)
+            target["match_keys"] = sorted(keys)
+            (covered if is_covered else uncovered).append(target)
+
+        if uncovered:
+            decision = "reject"
+            exit_code = 2 if mode == "strict" else 1
+        else:
+            decision = "accept"
+            exit_code = 0
+
+        enforcement_block = {
+            "enabled": True,
+            "mode": mode,
+            "threshold": threshold,
+            "declared_relationships": [
+                {k: v for k, v in d.items() if not k.startswith("_")}
+                for d in declared
+            ],
+            "declared_count": len(declared),
+            "above_threshold_count": len(above_threshold),
+            "covered_count": len(covered),
+            "uncovered_count": len(uncovered),
+            "uncovered": [
+                {
+                    "path": u.get("path"),
+                    "title": u.get("title"),
+                    "type": u.get("type"),
+                    "tier": u.get("tier"),
+                    "score": u.get("score"),
+                }
+                for u in uncovered
+            ],
+            "decision": decision,
+        }
+
+    payload = {
         "new_spec": str(new_spec_path),
         "new_spec_title": new_title,
         "new_spec_type": new_type,
@@ -469,12 +631,17 @@ def main() -> int:
             "frontmatter under `spec_relationships:` before ingest. External "
             "candidates use the URI scheme `external://<source>/<path>`; "
             "Phase 3 auto-propagation will NOT modify external pages (the "
-            "`writeable: false` flag enforces this contract). Phase 2 will "
-            "enforce relationship declaration for above-threshold candidates."
+            "`writeable: false` flag enforces this contract). Phase 2 enforces "
+            "relationship declaration for above-threshold candidates when "
+            "--enforce is set or `spec_authoring.enforce_relationship_declaration` "
+            "is true in SCHEMA.md."
         ),
         "phase": phase,
-    })
-    return 0
+    }
+    if enforcement_block is not None:
+        payload["enforcement"] = enforcement_block
+    emit(payload)
+    return exit_code
 
 
 if __name__ == "__main__":

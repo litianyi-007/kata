@@ -1,8 +1,8 @@
 ---
 name: wiki-spec
-description: "Spec history management. Before authoring a new spec (PRD / design / RFC / ADR / task-spec / decisions), surface related prior specs (from the kata wiki AND configured external-source backfills) so the author can declare relationships (supersedes / refines / extends / parallel / contradicts). v1.13 Phase 0+1: scan + advisory. Phase 2 enforces declaration; Phase 3 auto-propagates."
+description: "Spec history management. Before authoring a new spec (PRD / design / RFC / ADR / task-spec / decisions), surface related prior specs (from the kata wiki AND configured external-source backfills) so the author can declare relationships (supersedes / refines / extends / parallel / contradicts). v1.13 Phase 0+1+2: scan + advisory + enforcement. Phase 3 auto-propagates."
 user-invocable: true
-argument-hint: "preflight --new-spec <path> [--wiki=<path>] [--limit=10] [--include-archived] [--no-external] [--include-frozen-external]"
+argument-hint: "preflight --new-spec <path> [--wiki=<path>] [--limit=10] [--include-archived] [--no-external] [--include-frozen-external] [--enforce] [--enforce-threshold=<float>] [--enforce-mode=strict|confirm]"
 ---
 
 # wiki-spec
@@ -18,7 +18,7 @@ about to be ingested, surfacing prior specs that overlap on tags / title /
 explicit wikilinks, and (in Phase 2+) enforcing that the new spec declare
 relationships before ingest succeeds.
 
-## Phase 0+1 — advisory scan (current)
+## Phase 0+1+2 — advisory scan + enforcement (current)
 
 Scope:
 - Scan kata-managed wiki pages whose frontmatter `type` is in `spec_types`
@@ -31,18 +31,22 @@ Scope:
   will skip them
 - URI scheme `external://<source-name>/<path>` for external relationship
   targets
-- Do **not** enforce relationship declaration (Phase 2)
+- **Phase 2 enforcement (v2.4.0+)**: with `--enforce` (or
+  `spec_authoring.enforce_relationship_declaration: true` in SCHEMA.md),
+  the script rejects ingest when any candidate scored at-or-above
+  `enforcement_score_threshold` is not addressed in the new spec's
+  `spec_relationships:` block. Exit codes: 0 = accept, 2 = reject (strict),
+  1 = reject (confirm — agent should prompt for resolution).
 - Do **not** auto-propagate (Phase 3)
 
-## Phase 2+ (future)
+## Phase 3+ (future)
 
 | Phase | Adds |
 |---|---|
-| 2 | Required `spec_relationships:` frontmatter; ingest rejects on missing |
 | 3 | Auto-propagation: superseded specs get banner + tier flip + reverse-link |
 | 4 | `wiki-graph --spec-history <topic>` coherence view |
 
-See `docs/PRD-v1.13-spec-history-management.md` (forthcoming) for full design.
+See `docs/PRD-v1.13-spec-history-management.md` for full design.
 
 ## When to use
 
@@ -74,7 +78,9 @@ spec_authoring:
     - extends                # new builds on old without overriding; old stays canonical
     - parallel               # different concern, same domain
     - contradicts            # explicit disagreement — needs reconciliation
-  enforce_relationship_declaration: false  # Phase 2 toggle, off in Phase 0
+  enforce_relationship_declaration: false  # Phase 2 toggle, off by default
+  enforcement_score_threshold: 5.0         # Phase 2: candidates >= this require declaration
+  enforcement_mode: strict                 # strict (exit 2) | confirm (exit 1)
 ```
 
 All fields optional. Defaults are sensible for most kata wikis.
@@ -134,6 +140,18 @@ python {plugin_root}/scripts/spec_preflight.py \
 # Also scan frozen-treatment sources (rare — retired-project corpora):
 python {plugin_root}/scripts/spec_preflight.py \
     --new-spec <path> --include-frozen-external
+
+# Phase 2 enforcement: reject ingest if above-threshold candidates not declared
+python {plugin_root}/scripts/spec_preflight.py \
+    --new-spec <path> --enforce
+
+# Override schema threshold (one-shot tuning for a stricter / looser gate):
+python {plugin_root}/scripts/spec_preflight.py \
+    --new-spec <path> --enforce --enforce-threshold 4.0
+
+# Confirm mode instead of strict — exit code 1 so caller can prompt the user:
+python {plugin_root}/scripts/spec_preflight.py \
+    --new-spec <path> --enforce --enforce-mode confirm
 ```
 
 The output is JSON. Skills calling this script should parse and present the
@@ -285,14 +303,14 @@ After running:
 Per `plugin/CLAUDE.md`, use the standard `[Operation] / [Changes] / [Summary] /
 [Suggested next]` block on completion.
 
-## Known limitations (Phase 0)
+## Known limitations (Phase 0+1+2)
 
-- **No external sources** — Phase 1
-- **No enforcement** — Phase 2
 - **No auto-propagation** — Phase 3
 - **No coherence view** (lineage tree) — Phase 4
-- **Heuristic scoring** — title/tag/link/hub weights are hardcoded; Phase 1+ may make them schema-configurable
-- **No relationship suggestion** — Phase 0 surfaces candidates but does NOT suggest a relationship kind; the author decides
+- **Heuristic scoring** — title/tag/link/hub weights are hardcoded; later phases may make them schema-configurable
+- **No relationship suggestion** — preflight surfaces candidates but does NOT suggest a relationship kind; the author decides
+- **Threshold calibration is per-wiki** — the default `enforcement_score_threshold: 5.0` is calibrated against the smoke-test fixture; high-volume / rich-frontmatter wikis may need a higher threshold to avoid false enforcement triggers
+- **Confirm mode is structural only** — `enforcement_mode: confirm` returns exit code 1 with the same envelope as strict; per-candidate explicitly_unrelated marking is a future enhancement (caller currently has to re-run after the user adds declarations or lowers the threshold)
 
 If the candidate list is wrong (false positives / false negatives), check:
 - Are the right `spec_types` configured in SCHEMA.md? (Default includes

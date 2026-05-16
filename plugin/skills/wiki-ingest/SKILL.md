@@ -108,8 +108,7 @@ the top 5 to the user (or surface to the agent making authoring decisions)
 along with the relevance signals (`title_overlap`, `tag_overlap`,
 `link_reference`, `hub_score`, `type_match`).
 
-**For each top candidate, the author decides** (Phase 0 is advisory — Phase 2
-will enforce):
+**For each top candidate, the author decides**:
 
 1. **Skip** — the candidate is unrelated despite the surface overlap. No
    action needed.
@@ -118,7 +117,7 @@ will enforce):
    ```yaml
    spec_relationships:
      - kind: supersedes | refines | extends | parallel | contradicts
-       target: <wiki-path-of-old-spec>
+       target: <wiki-path-of-old-spec>     # or external://<source>/<rel> URI
        note: "<one-line rationale>"
    ```
 
@@ -128,18 +127,49 @@ will add that. If a relationship clearly implies the old spec is dead, the
 author may also want to manually run `wiki-tier --pin <old-spec>:archived`
 or add a `tier_override:` line by hand.
 
+**Phase 2 enforcement gate (v1.13, v2.4.0+)**:
+
+If SCHEMA.md sets `spec_authoring.enforce_relationship_declaration: true`,
+re-run preflight with `--enforce` immediately before step ④ (after the
+author has had a chance to add `spec_relationships:` to the draft):
+
+```bash
+python {plugin_root}/scripts/spec_preflight.py \
+    --new-spec {raw_source_path} \
+    --include-archived \
+    --enforce
+```
+
+Inspect the `enforcement` block in the JSON envelope:
+
+- **exit code 0** → `decision: "accept"`. All above-threshold candidates are
+  covered by the draft's `spec_relationships:` entries (or there are no
+  above-threshold candidates). Proceed to ③.
+- **exit code 2** → `decision: "reject"` (strict mode). Surface the
+  `enforcement.uncovered` list to the user and **abort the ingest**. The
+  author must either declare relationships for each uncovered candidate
+  or explicitly lower the threshold / disable enforcement.
+- **exit code 1** → `decision: "reject"` (confirm mode). Surface the
+  `enforcement.uncovered` list and ask the user, per-candidate, whether
+  to declare a relationship or mark as explicitly_unrelated, then re-run.
+
+The script reports `enforcement.threshold` and `enforcement.mode` in the
+envelope so the author can see which gate they tripped against.
+
 **When to skip this step** (no preflight needed):
 
 - `spec_authoring.enabled: false` (default for new wikis)
 - `spec_authoring.preflight: off`
 - Source's frontmatter `type` is not in spec_types
-- User passes `--no-spec-preflight` (force-skip override)
+- User passes `--no-spec-preflight` (force-skip override — also bypasses
+  enforcement; use only when the author has out-of-band justification)
 - Wiki has fewer than 2 existing spec-type pages (no candidates possible)
 
 **Configuration override**: if the source's frontmatter `type` is in
 `spec_types` but the user explicitly wants to skip preflight for this
 ingest, accept `--no-spec-preflight` and proceed straight to ③. Note this
-in step ⑦ Report so the user knows preflight was bypassed.
+in step ⑦ Report so the user knows preflight (and any enforcement) was
+bypassed.
 
 ### ③ Check existing pages
 

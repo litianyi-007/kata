@@ -321,6 +321,18 @@
           "type": "boolean",
           "default": false,
           "description": "Phase 2 toggle. When true, ingest of a spec-type page is rejected if any preflight candidate above score-threshold is not addressed in spec_relationships."
+        },
+        "enforcement_score_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "default": 5.0,
+          "description": "Phase 2: a preflight candidate with score >= this threshold requires an explicit entry in the new spec's `spec_relationships:` block. Below threshold: not enforced (caller may still declare voluntarily). 5.0 is calibrated against the Phase 0 fixture; tune per-wiki."
+        },
+        "enforcement_mode": {
+          "type": "string",
+          "enum": ["strict", "confirm"],
+          "default": "strict",
+          "description": "Phase 2 enforcement style. strict: ingest rejected with exit code 2 if any above-threshold candidate is uncovered. confirm: ingest paused, agent prompted to either declare or mark explicitly_unrelated per uncovered candidate (Phase 2 confirm-mode UX TBD; strict is the safer default)."
         }
       }
     }

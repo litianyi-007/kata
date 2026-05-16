@@ -4,6 +4,101 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.4.0] — 2026-05-16 — v1.13 SHM Phase 2: relationship declaration enforcement
+
+**Closes the loop** the v1.13 problem statement called out: until Phase 2,
+preflight surfaced related prior specs but the author was free to ignore
+them. With Phase 2, a wiki opting in via SCHEMA.md gets an ingest-time
+gate that rejects new specs whose `spec_relationships:` block does not
+address every above-threshold preflight candidate. This is the
+spec-drift fix that motivated v1.13.
+
+### New
+
+- **`spec_preflight.py --enforce` flag** — parses the new spec's
+  `spec_relationships:` block from frontmatter, compares declared
+  targets against the full (unbounded by `--limit`) ranked candidate
+  list, and rejects on uncovered above-threshold candidates.
+- **`--enforce-threshold <float>`** — per-invocation override of the
+  schema's `enforcement_score_threshold`. Useful for tighter or looser
+  one-shot runs without editing SCHEMA.md.
+- **`--enforce-mode strict|confirm`** — per-invocation override of the
+  schema's `enforcement_mode`. strict → exit code 2 on uncovered;
+  confirm → exit code 1 so the caller can prompt the user before
+  rejecting.
+- **Target normalization** — declared targets accept any of:
+  - Wiki-relative path: `decisions/F100-foo.md`
+  - Path without `.md`: `decisions/F100-foo`
+  - Bare stem: `F100-foo`
+  - Wikilink form: `[[F100-foo]]` or `[[F100-foo|display alias]]`
+  - External URI: `external://sdd-specs/F011-bar.md`
+  Match is case-insensitive on both full key and bare stem.
+- **`enforcement` block in JSON output** — when enforcement is active:
+  - `enabled`, `mode`, `threshold`
+  - `declared_relationships` (kind, target, note for each)
+  - `declared_count`, `above_threshold_count`, `covered_count`,
+    `uncovered_count`
+  - `uncovered`: array of {path, title, type, tier, score} for each
+    above-threshold candidate not covered by declarations
+  - `decision`: `accept` or `reject`
+- **Schema additions** in `spec_authoring`:
+  - `enforcement_score_threshold: 5.0` (default; tune per-wiki)
+  - `enforcement_mode: strict` (default; `confirm` opt-in)
+  - existing `enforce_relationship_declaration: false` remains the
+    master toggle
+- **`wiki-ingest` SKILL** — step ②b documents the Phase 2 gate: when
+  `enforce_relationship_declaration: true`, re-run preflight with
+  `--enforce` after the author has had a chance to add declarations;
+  abort ingest on exit code 2 / 1 with the structured `enforcement`
+  report.
+
+### Changed
+
+- **`wiki-spec` SKILL** — Phase scope updated (Phase 0+1+2 → scan +
+  advisory + enforcement); CLI examples include the new flags; the
+  Known-limitations section now flags Phase 3+ (auto-propagation,
+  lineage view) as the remaining work
+- **Root `SKILL.md` frontmatter** — description: "Phase 0+1" → "Phase
+  0+1+2 — wiki + external-source backfill + relationship-declaration
+  enforcement on ingest"
+- **`run_smoke.py` `run()` helper** — `allowed_exit_codes` parameter
+  added (defaults to `{0, 1}`, backwards compatible). Test 22 passes
+  `{0, 2}` to allow the strict-mode rejection path.
+
+### Validation
+
+`tests/run_smoke.py` Test 22 covers all five enforcement paths:
+- Run 1: schema enables enforcement, no declarations → exit 2, decision
+  `reject`, F100 surfaces in `uncovered`
+- Run 2: add `spec_relationships: [{kind: supersedes, target:
+  decisions/F100-payment-flow.md}]` → exit 0, decision `accept`,
+  `covered_count: 1`, `uncovered_count: 0`
+- Run 3: schema is strict, `--enforce-mode confirm` overrides → exit 1
+  on reject (caller-prompts path)
+- Run 4: `--enforce-threshold 999.0` raises bar above any candidate
+  score → `above_threshold_count: 0`, decision `accept`
+- Run 5: declaration uses `[[wikilink]]` form (stem only) → normalization
+  matches it to the full-path candidate, decision `accept`
+
+All 22 smoke tests pass on Windows + Linux + macOS.
+
+### Migration
+
+- Existing wikis with `spec_authoring.enabled: false` (default for new
+  wikis): nothing changes.
+- Existing wikis with Phase 0+1 enabled but no enforcement set: nothing
+  changes. `spec_preflight` continues to run in advisory mode.
+- To opt in: add to SCHEMA.md `spec_authoring:` block:
+  ```yaml
+  enforce_relationship_declaration: true
+  enforcement_score_threshold: 5.0     # adjust after observing
+  enforcement_mode: strict             # or confirm for caller-prompts
+  ```
+  Then run a manual preflight on a few existing specs to calibrate
+  the threshold before turning the gate on for live ingest.
+
+---
+
 ## [2.3.0] — 2026-05-16 — v1.13 SHM Phase 1: external source backfill
 
 **Extends Phase 0** (v2.2.0) so a kata adoption in the middle of an

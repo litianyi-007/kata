@@ -72,13 +72,17 @@ sys.path.insert(0, str(SCRIPTS))
 from wiki_lib import wiki_slug as wiki_slug_for_test  # noqa: E402
 
 
-def run(argv: list[str]) -> dict:
+def run(argv: list[str], allowed_exit_codes: set[int] | None = None) -> dict:
     """Run a script, parse JSON output. Print diagnostics on failure.
 
     Forces UTF-8 on both sides of the subprocess boundary so non-ASCII output
     (e.g. "→" in error messages) doesn't blow up on GitHub Actions
     windows-latest runners, where the default locale is cp1252.
+
+    `allowed_exit_codes` defaults to {0, 1}. Test 22 (v1.13 Phase 2 enforce)
+    passes {0, 2} since strict-mode rejection exits with code 2 by design.
     """
+    allowed = allowed_exit_codes if allowed_exit_codes is not None else {0, 1}
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     result = subprocess.run(
         [sys.executable, *argv],
@@ -88,8 +92,9 @@ def run(argv: list[str]) -> dict:
         cwd=str(ROOT),
         env=env,
     )
-    if result.returncode not in (0, 1):
-        print(f"FAIL: {' '.join(argv)} exited {result.returncode}")
+    if result.returncode not in allowed:
+        print(f"FAIL: {' '.join(argv)} exited {result.returncode} "
+              f"(allowed: {sorted(allowed)})")
         print("stderr:", result.stderr[:500])
         sys.exit(1)
     try:
@@ -2404,6 +2409,143 @@ exit 0
     assert pf2["tier_breakdown"]["external"] == 0, \
         f"external tier count should be 0 under --no-external"
     print("  ok  --no-external flag suppresses external enumeration")
+
+    print("\nTest 22: v1.13 SHM Phase 2 — relationship declaration enforcement")
+    # Fresh fixture: strong-overlap kata spec + draft that should trigger the
+    # enforcement gate. First run: no declaration → reject. Then add a
+    # declaration → accept.
+    enf_wiki = FIXTURE.parent / "_spec_phase2_enforce"
+    if enf_wiki.exists():
+        _windows_safe_rmtree(enf_wiki)
+    (enf_wiki / "decisions").mkdir(parents=True)
+    (enf_wiki / "raw").mkdir()
+
+    (enf_wiki / "SCHEMA.md").write_text(
+        "## Domain\nfixture\n\n## Categories\n\n```yaml\ncategories:\n"
+        "  - name: decisions\n    purpose: \"decisions content\"\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 365\n  archived_days: 730\n"
+        "  driving_field: published_at\n```\n\n"
+        "## Spec authoring\n\n```yaml\nspec_authoring:\n  enabled: true\n"
+        "  enforce_relationship_declaration: true\n"
+        "  enforcement_score_threshold: 4.0\n"
+        "  enforcement_mode: strict\n```\n",
+        encoding="utf-8")
+    (enf_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (enf_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+
+    # Strong-overlap prior spec — title + 4 tags + same type pushes it
+    # well above the 4.0 threshold (2×title + 1.5×4tags + 1.0 type-match
+    # ≈ 9.0 baseline, +hub_score ≥ 0).
+    (enf_wiki / "decisions" / "F100-payment-flow.md").write_text(
+        "---\ntitle: \"Payment Flow Authority Spec\"\n"
+        "type: decisions\n"
+        "tags: [payment, checkout, billing, refund]\n"
+        "published_at: 2026-05-10\n---\n\n"
+        "# F100 payment flow authority spec\n",
+        encoding="utf-8")
+
+    new_draft_v1 = enf_wiki / "raw" / "draft-payment-rewrite-v1.md"
+    new_draft_v1.write_text(
+        "---\ntitle: \"Payment Flow Rewrite Spec\"\n"
+        "type: decisions\n"
+        "tags: [payment, checkout, billing, refund]\n---\n\n"
+        "# Rewrite of payment flow.\n",
+        encoding="utf-8")
+
+    # Run 1: enforcement reads schema, no declaration → reject (exit 2)
+    enf1 = run([str(SCRIPTS / "spec_preflight.py"),
+                "--wiki", str(enf_wiki),
+                "--new-spec", str(new_draft_v1)],
+               allowed_exit_codes={0, 2})
+    assert_eq("Phase 2 marker on enforce run", enf1["phase"], 2)
+    assert "enforcement" in enf1, \
+        f"enforcement block missing; payload keys: {sorted(enf1.keys())}"
+    enf_block = enf1["enforcement"]
+    assert_eq("enforcement enabled", enf_block["enabled"], True)
+    assert_eq("enforcement mode strict from schema", enf_block["mode"], "strict")
+    assert_eq("enforcement threshold from schema", enf_block["threshold"], 4.0)
+    assert_eq("enforcement decision reject (no declarations)",
+              enf_block["decision"], "reject")
+    assert_eq("declared_count zero", enf_block["declared_count"], 0)
+    assert_ge("above_threshold candidates ≥ 1", enf_block["above_threshold_count"], 1)
+    assert_ge("uncovered_count ≥ 1", enf_block["uncovered_count"], 1)
+    # F100 must appear in uncovered list
+    f100 = next((u for u in enf_block["uncovered"]
+                 if "F100-payment-flow" in (u.get("path") or "")), None)
+    assert f100 is not None, \
+        f"F100 expected in uncovered; got {[u.get('path') for u in enf_block['uncovered']]}"
+    print("  ok  enforcement rejects: no declarations → exit 2, decision=reject, "
+          "F100 surfaced as uncovered")
+
+    # Run 2: add spec_relationships declaration targeting F100 → accept (exit 0)
+    new_draft_v2 = enf_wiki / "raw" / "draft-payment-rewrite-v2.md"
+    new_draft_v2.write_text(
+        "---\ntitle: \"Payment Flow Rewrite Spec\"\n"
+        "type: decisions\n"
+        "tags: [payment, checkout, billing, refund]\n"
+        "spec_relationships:\n"
+        "  - kind: supersedes\n"
+        "    target: decisions/F100-payment-flow.md\n"
+        "    note: \"F100 absorbed by this rewrite\"\n"
+        "---\n\n"
+        "# Rewrite of payment flow.\n",
+        encoding="utf-8")
+
+    enf2 = run([str(SCRIPTS / "spec_preflight.py"),
+                "--wiki", str(enf_wiki),
+                "--new-spec", str(new_draft_v2)])
+    enf_block2 = enf2["enforcement"]
+    assert_eq("enforcement decision accept after declaration",
+              enf_block2["decision"], "accept")
+    assert_eq("declared_count one", enf_block2["declared_count"], 1)
+    assert_eq("uncovered_count zero", enf_block2["uncovered_count"], 0)
+    assert_eq("covered_count one", enf_block2["covered_count"], 1)
+    print("  ok  enforcement accepts: relationship target=decisions/F100... "
+          "covers above-threshold candidate, exit 0")
+
+    # Run 3: --enforce-mode confirm overrides schema mode strict → exit 1
+    enf3 = run([str(SCRIPTS / "spec_preflight.py"),
+                "--wiki", str(enf_wiki),
+                "--new-spec", str(new_draft_v1),
+                "--enforce-mode", "confirm"],
+               allowed_exit_codes={0, 1})
+    assert_eq("CLI --enforce-mode overrides schema",
+              enf3["enforcement"]["mode"], "confirm")
+    assert_eq("confirm mode still reports reject",
+              enf3["enforcement"]["decision"], "reject")
+    print("  ok  --enforce-mode confirm overrides schema, exit 1 on reject")
+
+    # Run 4: --enforce-threshold raises bar above candidate score → accept
+    # (no above-threshold candidates remain even without declarations)
+    enf4 = run([str(SCRIPTS / "spec_preflight.py"),
+                "--wiki", str(enf_wiki),
+                "--new-spec", str(new_draft_v1),
+                "--enforce-threshold", "999.0"])
+    assert_eq("very-high threshold → no candidates above",
+              enf4["enforcement"]["above_threshold_count"], 0)
+    assert_eq("very-high threshold → accept",
+              enf4["enforcement"]["decision"], "accept")
+    print("  ok  --enforce-threshold raises bar, no above-threshold → accept")
+
+    # Run 5: stem-form target (just F100-payment-flow, no path / no .md)
+    new_draft_v3 = enf_wiki / "raw" / "draft-payment-rewrite-v3.md"
+    new_draft_v3.write_text(
+        "---\ntitle: \"Payment Flow Rewrite Spec\"\n"
+        "type: decisions\n"
+        "tags: [payment, checkout, billing, refund]\n"
+        "spec_relationships:\n"
+        "  - kind: supersedes\n"
+        "    target: \"[[F100-payment-flow]]\"\n"
+        "---\n\n"
+        "# Rewrite of payment flow.\n",
+        encoding="utf-8")
+    enf5 = run([str(SCRIPTS / "spec_preflight.py"),
+                "--wiki", str(enf_wiki),
+                "--new-spec", str(new_draft_v3)])
+    assert_eq("wikilink-form target accepted (stem match)",
+              enf5["enforcement"]["decision"], "accept")
+    print("  ok  [[wikilink]]-form target normalized + matched against candidate stem")
 
     print("\nAll smoke tests passed.")
     return 0
