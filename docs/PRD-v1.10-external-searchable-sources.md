@@ -2,7 +2,15 @@
 
 Status: Draft
 Date: 2026-05-11
-Author: litianyi
+Author: surebeli
+
+> **Related work (2026-05-16):** v1.13 SHM extends this PRD's
+> `.wiki-plugins.yaml` mechanism with a `treatment: raw|frozen|active`
+> flag and wires external sources into spec preflight (so a mid-project
+> kata adoption can scan a historical SDD spec corpus without bulk-
+> importing). v1.13 does **not** supersede v1.10 — v1.10's query-fallback
+> behavior is preserved as `treatment: active` default. See
+> [`PRD-v1.13-spec-history-management.md`](PRD-v1.13-spec-history-management.md).
 
 ## Context
 
