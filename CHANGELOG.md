@@ -4,6 +4,78 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.5.0] — 2026-05-17 — v1.13 SHM Phase 1 removed (external_sources)
+
+**Removes a feature shipped in v2.3.0 the previous day** because the
+abstraction broke kata's self-closing principle. v2.4.0 Phase 2
+enforcement stays — it's purely kata-internal and unaffected.
+
+### Removed
+
+- `external_sources` array from `schema/wiki-schema.json` + the
+  `$defs/external_source` definition
+- `_load_external_sources()` / `_enumerate_external_pages()` helpers
+  from `plugin/scripts/spec_preflight.py`
+- CLI flags `--no-external` and `--include-frozen-external`
+- External-candidate scoring loop in `spec_preflight.main()`
+- `external://<source>/<path>` URI normalization branch in
+  `_candidate_match_keys()` (Phase 2 was kata-internal; URI branch
+  was a leftover from Phase 1)
+- Output fields `external_sources_scanned`, `external_skipped`,
+  `tier_breakdown.external`, and the per-candidate `source` /
+  `source_treatment` / `writeable` / `fs_path` fields
+- `tests/run_smoke.py` Test 21 (Phase 1 end-to-end fixture)
+- `plugin/skills/wiki-spec/SKILL.md` Phase 1 documentation,
+  external-source configuration table, and Phase 1 output sample
+
+### Why
+
+Three reasons compounding:
+
+1. **`wiki-import` already covers human-curated bulk ingest**. A team
+   with a legacy SDD spec corpus can run
+   `wiki-import <corpus> --priority=recency --per-file-prompt` and get
+   exactly the curated import external_sources was trying to avoid. The
+   "avoid bulk-import" framing was solving a non-problem.
+2. **Authority + self-closing violation**. `external_sources` reached
+   outside `{wiki_path}/` to enumerate, score, and surface third-party
+   markdown files. That breaks the kata invariant that the wiki is a
+   compiled artifact under one root. To make it work we'd have had to
+   invent an entire lifecycle (transit → graduation → blocklist → TTL)
+   — and the fact that we needed to invent a lifecycle to make the
+   abstraction behave is itself a sign the abstraction was wrong.
+3. **Federation is the right architecture for cross-source**. Two
+   self-closing kata wikis cooperating at the `wiki-query` ↔
+   `wiki-query` layer (planned for v1.12) preserves both sides'
+   authority. Reaching into raw markdown dirs does not.
+
+Empirical motivation: a NECallKit test (363 historical specs/docs)
+returned `page_count: 0` for both external sources, because 95%+ of the
+legacy corpus had no YAML frontmatter — and a path-pattern type
+inference patch to fix it would have been a sunk-cost workaround for an
+abstraction that needed removal, not extension. Full architectural
+reasoning in
+`~/.llm-wiki/kata/decisions/2026-05-17-external-sources-removed.md`
+(kata self-meta wiki ADR, also intended as essay seed material).
+
+### Migration
+
+- Wikis that adopted `external_sources` in v2.3.0 (window: 2026-05-16 →
+  2026-05-17, very few users): remove the `external_sources:` block
+  from `.wiki-plugins.yaml`. If the historical corpus is still needed,
+  run `wiki-import <corpus_path>` instead — it produces real kata pages
+  with proper frontmatter, full graph participation, and tier lifecycle.
+- v2.4.0 Phase 2 enforcement (`--enforce`, `enforce_relationship_declaration`,
+  threshold + mode CLI) is unchanged.
+- v2.2.0 Phase 0 advisory preflight is unchanged.
+
+### Validation
+
+All 21 smoke tests pass after Test 21 removal (the deleted test was the
+only one that exercised external_sources). Pre-commit hook clean.
+
+---
+
 ## [2.4.0] — 2026-05-16 — v1.13 SHM Phase 2: relationship declaration enforcement
 
 **Closes the loop** the v1.13 problem statement called out: until Phase 2,

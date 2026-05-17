@@ -1,7 +1,7 @@
 ---
 name: kata
-description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 14 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec). Spec History Management (v1.13) in Phase 0+1+2 — wiki + external-source backfill + relationship-declaration enforcement on ingest."
-version: 2.4.0
+description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 14 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec). Spec History Management (v1.13) in Phase 0+2 — kata-internal preflight + relationship-declaration enforcement on ingest. Cross-source authoring is served by wiki-import or v1.12 cross-wiki federation, not external_sources (removed in v2.5.0)."
+version: 2.5.0
 author: surebeli
 license: MIT
 ---
@@ -132,7 +132,7 @@ confirmation. See `PLUGINS.md` (or the `wiki-query` skill) for the full spec.
 | `wiki-lint` | `[--fix] [--report-only] [--check=orphans\|links\|frontmatter\|stale\|index\|tags\|size\|gaps\|schema\|tiers\|dimensions]` | Health-check the wiki: structural checks (orphans, broken links, frontmatter, stale content, tier c… |
 | `wiki-query` | `<question> [--file] [--format=markdown\|table\|slides\|chart\|canvas] [--tier=active\|all\|archived\|frozen] [--external] [--no-external] [--auto-external]` | Answer a question using the wiki's compiled knowledge. Searches relevant pages, synthesizes with ci… |
 | `wiki-search` | `<query> [--tag=<tag>] [--type=entity\|concept\|comparison\|query] [--limit=10] [--tier=active\|all\|archived\|frozen]` | Search the wiki by keyword, tag, topic, or type. Returns ranked results with page summaries and mat… |
-| `wiki-spec` | `preflight --new-spec <path> [--wiki=<path>] [--limit=10] [--include-archived] [--no-external] [--include-frozen-external] [--enforce] [--enforce-threshold=<float>] [--enforce-mode=strict\|confirm]` | Spec history management. Before authoring a new spec (PRD / design / RFC / ADR / task-spec / decisi… |
+| `wiki-spec` | `preflight --new-spec <path> [--wiki=<path>] [--limit=10] [--include-archived] [--enforce] [--enforce-threshold=<float>] [--enforce-mode=strict\|confirm]` | Spec history management. Before authoring a new spec (PRD / design / RFC / ADR / task-spec / decisi… |
 | `wiki-sync` | `[--auto] [--dry-run]` | Multi-machine git sync for the wiki: pull, merge with custom drivers (log.md union+sort), push. Loc… |
 | `wiki-tier` | `[--show] [--set-active=Nd] [--set-archived=Nd] [--set-field=published_at\|ingested_at] [--preview] [--pin=<page>:<tier>] [--unpin=<page>] [--list=<tier>] [--disable] [--enable]` | Inspect and manage the memory-tier system: view the active/archived/frozen distribution, preview a… |
 | `wiki-watch` | `[--start [--poll N --debounce N]] [--stop] [--status] [--drain [--pages 1,2,3]] [--remove <id>]` | Watch raw/{articles,papers,transcripts,external}/ for new files, queue them, and let the user drain… |

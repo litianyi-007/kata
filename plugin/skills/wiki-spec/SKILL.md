@@ -1,8 +1,8 @@
 ---
 name: wiki-spec
-description: "Spec history management. Before authoring a new spec (PRD / design / RFC / ADR / task-spec / decisions), surface related prior specs (from the kata wiki AND configured external-source backfills) so the author can declare relationships (supersedes / refines / extends / parallel / contradicts). v1.13 Phase 0+1+2: scan + advisory + enforcement. Phase 3 auto-propagates."
+description: "Spec history management. Before authoring a new spec (PRD / design / RFC / ADR / task-spec / decisions), surface related prior specs from the kata wiki so the author can declare relationships (supersedes / refines / extends / parallel / contradicts). v1.13 Phase 0+2: scan + advisory + enforcement. Phase 3 auto-propagates. Cross-source authoring is served by wiki-import (bulk human ingest) or v1.12 cross-wiki federation."
 user-invocable: true
-argument-hint: "preflight --new-spec <path> [--wiki=<path>] [--limit=10] [--include-archived] [--no-external] [--include-frozen-external] [--enforce] [--enforce-threshold=<float>] [--enforce-mode=strict|confirm]"
+argument-hint: "preflight --new-spec <path> [--wiki=<path>] [--limit=10] [--include-archived] [--enforce] [--enforce-threshold=<float>] [--enforce-mode=strict|confirm]"
 ---
 
 # wiki-spec
@@ -18,32 +18,45 @@ about to be ingested, surfacing prior specs that overlap on tags / title /
 explicit wikilinks, and (in Phase 2+) enforcing that the new spec declare
 relationships before ingest succeeds.
 
-## Phase 0+1+2 — advisory scan + enforcement (current)
+## Phase 0+2 — advisory scan + enforcement (current)
 
 Scope:
 - Scan kata-managed wiki pages whose frontmatter `type` is in `spec_types`
-- Scan external sources from `.wiki-plugins.yaml` `external_sources:` block
-  (default treatments `active` + `raw`; `--include-frozen-external` adds
-  frozen sources)
 - Score and rank candidates by relevance (title overlap, tag overlap,
-  wikilink reference, hub score for kata pages, type match)
-- External candidates flagged `writeable: false` — Phase 3 auto-propagation
-  will skip them
-- URI scheme `external://<source-name>/<path>` for external relationship
-  targets
+  wikilink reference, hub centrality, type match)
 - **Phase 2 enforcement (v2.4.0+)**: with `--enforce` (or
   `spec_authoring.enforce_relationship_declaration: true` in SCHEMA.md),
   the script rejects ingest when any candidate scored at-or-above
   `enforcement_score_threshold` is not addressed in the new spec's
   `spec_relationships:` block. Exit codes: 0 = accept, 2 = reject (strict),
   1 = reject (confirm — agent should prompt for resolution).
-- Do **not** auto-propagate (Phase 3)
+- Kata-internal only by design — no reaching outside `{wiki_path}/`.
+
+## Cross-source authoring (NOT this skill)
+
+Two valid paths for legacy / cross-project spec corpora:
+
+1. **`wiki-import`** — human-curated bulk import of an existing
+   markdown corpus into the kata wiki, with checkpoint/resume +
+   per-file prompt. Use this when adopting kata mid-project.
+2. **v1.12 cross-wiki federation** (planned) — two kata wikis
+   cooperating at the `wiki-query` ↔ `wiki-query` layer. Each side
+   stays self-closed; cooperation happens at the query layer, not the
+   data layer.
+
+An earlier v1.13 Phase 1 (`external_sources` in `.wiki-plugins.yaml`)
+was shipped in v2.3.0 and removed in v2.5.0 — see ADR
+`~/.llm-wiki/kata/decisions/2026-05-17-external-sources-removed.md`
+and CHANGELOG `[2.5.0]` for the architectural reasoning. Short version:
+reaching outside the wiki root for "transit" data violates kata's
+self-closing principle and required inventing a lifecycle (graduation /
+blocklist / TTL) that didn't belong inside a preflight skill.
 
 ## Phase 3+ (future)
 
 | Phase | Adds |
 |---|---|
-| 3 | Auto-propagation: superseded specs get banner + tier flip + reverse-link |
+| 3 | Auto-propagation: superseded specs get banner + tier flip + reverse-link (kata-internal only) |
 | 4 | `wiki-graph --spec-history <topic>` coherence view |
 
 See `docs/PRD-v1.13-spec-history-management.md` for full design.
@@ -120,7 +133,7 @@ Phase 0 does **not** enforce this — it's an advisory step.
 ## CLI
 
 ```bash
-# Basic: scan kata wiki + configured external sources
+# Basic: scan kata wiki
 python {plugin_root}/scripts/spec_preflight.py \
     --new-spec ~/.llm-wiki/myproject/raw/drafts/F017-new-spec.md
 
@@ -132,14 +145,6 @@ python {plugin_root}/scripts/spec_preflight.py \
 # Cap the candidate list:
 python {plugin_root}/scripts/spec_preflight.py \
     --new-spec <path> --limit 5
-
-# Skip external sources (kata-only):
-python {plugin_root}/scripts/spec_preflight.py \
-    --new-spec <path> --no-external
-
-# Also scan frozen-treatment sources (rare — retired-project corpora):
-python {plugin_root}/scripts/spec_preflight.py \
-    --new-spec <path> --include-frozen-external
 
 # Phase 2 enforcement: reject ingest if above-threshold candidates not declared
 python {plugin_root}/scripts/spec_preflight.py \
@@ -157,38 +162,6 @@ python {plugin_root}/scripts/spec_preflight.py \
 The output is JSON. Skills calling this script should parse and present the
 candidates with their relevance signals; the author then decides relationships.
 
-## External source configuration (Phase 1)
-
-Phase 1 adds backfill from external markdown corpora — typically a
-project's pre-kata SDD spec directory that the team wants to reference
-without bulk-importing into kata. Configure in `.wiki-plugins.yaml`:
-
-```yaml
-external_sources:
-  - name: sdd-specs                  # short slug, used in external://<name>/...
-    type: directory                  # Phase 1 only supports directory
-    root: ~/work/myproject/docs/specs  # absolute or ~-prefixed path
-    treatment: raw                   # active | raw (default) | frozen
-    description: "Pre-kata SDD spec corpus, May 2025 onward"
-    discover:
-      type_field: type               # frontmatter key holding the type
-      exclude:                       # optional substring matches to skip
-        - drafts/
-        - archived/
-```
-
-The `treatment` flag controls visibility:
-
-| Treatment | wiki-search default | spec preflight scan |
-|---|---|---|
-| `active` | Yes — co-equal with kata pages | Yes (always) |
-| `raw` (default) | No — excluded from default search | Yes — surfaces for preflight only |
-| `frozen` | No | Only with `--include-frozen-external` |
-
-`raw` is the right choice for most adoption scenarios: the historical
-corpus stays out of daily search noise but participates in spec preflight
-when authoring new specs that might overlap with prior decisions.
-
 ## Output format
 
 ```json
@@ -200,13 +173,8 @@ when authoring new specs that might overlap with prior decisions.
   "new_spec_wikilinks": ["f016-electron-vue2-uikit-reuse-resolved", "..."],
   "spec_types_configured": ["adr", "decisions", "design", "prd", "rfc", "task-spec"],
   "tier_filter": ["active", "archived"],
-  "tier_breakdown": {"active": 1, "archived": 12, "frozen": 0, "external": 3},
-  "external_sources_scanned": [
-    {"name": "sdd-specs", "treatment": "raw", "page_count": 42,
-     "scored_count": 3, "elapsed_ms": 28.4}
-  ],
-  "external_skipped": [],
-  "candidates_found": 7,
+  "tier_breakdown": {"active": 1, "archived": 12, "frozen": 0},
+  "candidates_found": 4,
   "candidates": [
     {
       "path": "decisions/F016-...-resolved.md",
@@ -221,47 +189,18 @@ when authoring new specs that might overlap with prior decisions.
         "hub_score": 1.0,
         "type_match": true
       }
-    },
-    {
-      "path": "external://sdd-specs/F011-merge-back.md",
-      "fs_path": "/Users/me/work/myproject/docs/specs/F011-merge-back.md",
-      "title": "F011 merge-back lane discipline",
-      "type": "decisions",
-      "tier": "external",
-      "source": "sdd-specs",
-      "source_treatment": "raw",
-      "writeable": false,
-      "score": 8.5,
-      "signals": {
-        "title_overlap": 0,
-        "tag_overlap": 4,
-        "link_reference": true,
-        "hub_score": 0.0,
-        "type_match": true,
-        "external_penalty": -0.5
-      }
     }
   ],
-  "advisory": "Phase 0+1 (advisory): ... declare relationships ... `writeable: false` ...",
-  "phase": 1
+  "advisory": "Phase 0 (advisory): ... declare relationships ...",
+  "phase": 0
 }
 ```
 
-Key Phase 1 fields:
+When `--enforce` is set (or schema's `enforce_relationship_declaration: true`),
+the payload adds an `enforcement` block — see `wiki-ingest` SKILL step ②b
+and CHANGELOG `[2.4.0]` for full structure.
 
-- `tier_breakdown.external`: count of external candidates that scored above
-  zero (separate from active/archived/frozen which are kata-managed)
-- `external_sources_scanned`: per-source diagnostic (page count, scored
-  count, elapsed ms)
-- `external_skipped`: sources excluded by treatment filter (e.g. frozen
-  sources without `--include-frozen-external`)
-- `candidates[].source` / `candidates[].source_treatment`: present only
-  on external candidates
-- `candidates[].writeable: false`: invariant for external candidates;
-  Phase 3 auto-propagation will skip them and instead write an internal
-  reverse-index file `decisions/.spec-reverse-index.md` (Phase 3 detail)
-
-## Relationship declaration convention (Phase 0 — manual)
+## Relationship declaration convention
 
 Once the author reviews the candidate list, the new spec's frontmatter should
 include:
@@ -276,9 +215,10 @@ spec_relationships:
     note: "F011 lane discipline carries forward; F017 adds Vue2 specifics"
 ```
 
-The `target` is a wiki path relative to the wiki root. Phase 1 will introduce
-`external://<source-name>/<path>` URI scheme for external-source targets. The
-`note` field is free-form and recommended.
+The `target` is a wiki path relative to the wiki root (or a stem-only
+form, or `[[wikilink]]`, or `target.md` with or without the extension —
+all normalized for the enforcement coverage check). The `note` field is
+free-form and recommended.
 
 ## Reporting back
 
@@ -303,7 +243,7 @@ After running:
 Per `plugin/CLAUDE.md`, use the standard `[Operation] / [Changes] / [Summary] /
 [Suggested next]` block on completion.
 
-## Known limitations (Phase 0+1+2)
+## Known limitations (Phase 0+2)
 
 - **No auto-propagation** — Phase 3
 - **No coherence view** (lineage tree) — Phase 4

@@ -111,8 +111,9 @@ Secondary:
    spec content.
 
 2. **Cross-organizational spec sharing.** v1.13 operates within a single
-   wiki + its configured external sources. Cross-wiki federation (v1.12)
-   is a separate PRD; v1.13 does not depend on it.
+   kata wiki (Phase 1 external-sources backfill was tried and removed in
+   v2.5.0 — see that Phase's section below). Cross-wiki federation
+   (v1.12) is a separate PRD and now handles all cross-source needs.
 
 3. **Resolving spec contradictions.** v1.13 surfaces the contradiction
    (kind: contradicts) and lets the author write a reconciliation note;
@@ -218,27 +219,13 @@ Field constraints:
 | `target` | Yes | Either a wiki-relative path OR `external://<source>/<path>` |
 | `note` | Phase 2 enforces; Phase 0 optional | Free-form, recommended for `contradicts` |
 
-### URI scheme for external relationships
+### URI scheme for external relationships (DEPRECATED)
 
-`external://<source-name>/<path-within-source>` where `<source-name>` matches
-a registered entry in `.wiki-plugins.yaml`.
-
-Example:
-
-```yaml
-# .wiki-plugins.yaml
-external_sources:
-  - name: sdd-specs
-    type: directory
-    root: /Users/me/work/myproject/docs/specs
-    treatment: raw                       # see Phase 1 below
-    discover:
-      pattern: "**/*.md"
-      type_field: "type"                 # which frontmatter key holds the type
-```
-
-Then `target: external://sdd-specs/F011-merge-back.md` resolves to
-`/Users/me/work/myproject/docs/specs/F011-merge-back.md`.
+`external://<source-name>/<path>` was introduced for Phase 1 and removed
+with Phase 1 in v2.5.0. Cross-source relationship targets are no longer
+declared via URI; use `wiki-import` to bring legacy specs into the kata
+wiki (then declare with a normal wiki-relative path), or wait for v1.12
+cross-wiki federation.
 
 ## Phase 0 — advisory preflight (kata-only) — SHIPPED 2026-05-16
 
@@ -276,7 +263,6 @@ the wiki by step ④ of wiki-ingest.
 
 ### What it does NOT do
 
-- No external sources (Phase 1)
 - No enforcement — author can ignore candidates entirely
 - No auto-propagation — `supersedes` declarations do not touch the target
 - No relationship suggestion — the script surfaces candidates but does
@@ -299,94 +285,60 @@ See `plugin/scripts/spec_preflight.py` docstring + `plugin/skills/wiki-spec/SKIL
 - Advisory text present
 - Tier breakdown computed
 
-## Phase 1 — external source backfill
+## Phase 1 — external source backfill (REMOVED 2026-05-17)
 
-### Motivation
+**Status**: shipped in v2.3.0 on 2026-05-16, removed in v2.5.0 on
+2026-05-17. The slot is intentionally vacated, not filled. See ADR
+`~/.llm-wiki/kata/decisions/2026-05-17-external-sources-removed.md`
+and CHANGELOG `[2.5.0]` for the full architectural reasoning.
 
-A team adopting kata at month 7 of an SDD-style project has 50-200 spec
-documents already on disk. Bulk-importing all of them into kata is wrong
-for two reasons:
+### Why removed
 
-1. **Signal-to-noise.** Most old specs are background; only a few are
-   load-bearing for current decisions. Ingesting all dilutes the wiki.
+Three converging reasons, each fatal on its own:
 
-2. **Authoring authority.** Old specs were written under a different
-   tool / workflow / set of conventions. Kata should not retroactively
-   "claim" them.
+1. **`wiki-import` already covers the use case.** Human-curated bulk
+   ingest of a legacy markdown corpus is exactly what `wiki-import` was
+   built for (folder traversal, schema mapping, checkpoint/resume,
+   per-file prompt). The "avoid bulk-import" framing was solving a
+   non-problem.
 
-External-source backfill solves both: the old specs stay where they are,
-become preflight-queryable, but kata does not own or modify them.
+2. **Self-closing violation.** The `external_sources` block reached
+   outside `{wiki_path}/` to enumerate + score + surface third-party
+   markdown files. To make it behave correctly we had to invent a
+   lifecycle (transit zone → graduation → blocklist → TTL) — the fact
+   that we needed to invent a lifecycle to make the abstraction work
+   is itself the signal the abstraction was wrong. Kata's invariant is
+   that the wiki is a compiled artifact under one root; `external_sources`
+   leaked that boundary.
 
-### Treatment flag
+3. **Federation is the right architecture for cross-source.** Two
+   self-closing kata wikis cooperating at the `wiki-query` ↔
+   `wiki-query` layer (planned for v1.12) preserves both sides'
+   authority. Reaching into raw markdown dirs does not.
 
-`.wiki-plugins.yaml` entries gain a `treatment:` field:
+### What the slot does now
 
-| Treatment | Behavior |
-|---|---|
-| `active` | Source queried co-equal with kata wiki. Default behavior of v1.10 query-fallback. Appropriate for actively-maintained sibling document libraries. |
-| `raw` *(default for spec preflight context)* | Source NOT included in default wiki-search / wiki-query, BUT included in spec_preflight scans. Appropriate for historical spec corpus that should inform new authoring but not surface generally. |
-| `frozen` | Source excluded from all default scans; surfaces only with explicit `--include-frozen-external` flag. Appropriate for retired-project spec dumps. |
+- **Mid-adoption legacy corpus** → run `wiki-import <corpus>` with
+  `--priority=recency --per-file-prompt`. The historical specs become
+  real kata pages with proper frontmatter, full graph participation,
+  and tier lifecycle. Phase 0 preflight + Phase 2 enforcement then
+  cover them the same way they cover any kata-managed spec.
+- **Live cross-project cooperation** → punt to v1.12 cross-wiki
+  federation (separate PRD).
+- **Lightweight reference (don't want to ingest, don't need federation)**
+  → just use a wikilink to a path that doesn't resolve; the link
+  preserves intent for humans, kata won't score it as a candidate, no
+  ambiguity about ownership.
 
-The flag interacts with v1.10 query fallback as follows: v1.10's
-`when_to_call` (on_empty / on_low_confidence / on_request) still applies
-for query fallback, but spec preflight uses the `treatment` flag instead.
-A source can be both v1.10 query fallback AND spec preflight backfill.
+### Empirical motivation for removal
 
-### Scope changes
-
-`spec_preflight.py` gains a phase-1 mode:
-
-```bash
-python spec_preflight.py \
-    --new-spec <path> \
-    --include-external                   # default true in Phase 1+
-    --external-treatment active,raw      # which treatments to scan
-```
-
-External candidates are returned in the same JSON envelope with:
-
-```json
-{
-  "candidates": [
-    {
-      "path": "external://sdd-specs/F011-merge-back.md",
-      "source": "sdd-specs",
-      "source_treatment": "raw",
-      "title": "F011 Master merge-back",
-      "type": "design",
-      "tier": "external",
-      "score": 8.5,
-      "signals": { ... },
-      "writeable": false
-    }
-  ]
-}
-```
-
-The `writeable: false` flag is the key Phase 1 invariant: external
-candidates can be referenced in `spec_relationships:`, but Phase 3
-auto-propagation does not modify them.
-
-### Relationship constraints for external targets
-
-| Relationship kind | external target? |
-|---|---|
-| `supersedes` | Allowed in declaration; **NOT auto-propagated** (Phase 3 skips external). Author may manually edit the external file if desired. |
-| `refines` | Allowed |
-| `extends` | Allowed |
-| `parallel` | Allowed |
-| `contradicts` | Allowed; emits a warning that the contradiction is one-sided (external is not updated) |
-| `references` | Allowed |
-
-### Output extensions
-
-The preflight JSON gains:
-
-- `external_sources_scanned: [{name, treatment, page_count, ms}]` — per-source diagnostic
-- `external_skipped: [{name, reason}]` — sources excluded (frozen unless flag set, treatment=off, etc.)
-- `cross_source_overlap: bool` — whether any candidate pair from
-  different sources looks like duplicates (Phase 1+ heuristic; may
-  inform Phase 4 coherence view)
+Tested against NECallKit (real project, 363 historical spec/doc files
+in `specs/` + `docs/`). With both directories mounted as
+`external_sources`, preflight returned `page_count: 0` on both — 95%+
+of the legacy corpus had no YAML frontmatter, so the `discover.type_field`
+filter silently dropped everything. The path-pattern type-inference
+patch that would have fixed it was a sunk-cost workaround for an
+abstraction the team decided to remove instead of extend.
 
 ## Phase 2 — relationship declaration enforcement
 
