@@ -8,6 +8,7 @@ Run: python tests/run_smoke.py
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -2421,6 +2422,226 @@ exit 0
     assert_eq("wikilink-form target accepted (stem match)",
               enf5["enforcement"]["decision"], "accept")
     print("  ok  [[wikilink]]-form target normalized + matched against candidate stem")
+
+    print("\nTest 23: v1.11 session-ingest — Claude Code jsonl-read end-to-end")
+    # Build a synthetic Claude Code project dir + jsonl fixture under a
+    # tempdir HOME so the test never touches the real ~/.claude/projects/.
+    sess_home = FIXTURE.parent / "_session_claude_home"
+    sess_wiki = FIXTURE.parent / "_session_claude_wiki"
+    for d in (sess_home, sess_wiki):
+        if d.exists():
+            _windows_safe_rmtree(d)
+    sess_wiki.mkdir(parents=True)
+    (sess_wiki / "raw").mkdir()
+    (sess_wiki / "SCHEMA.md").write_text(
+        "## Domain\nfixture\n\n## Categories\n\n```yaml\ncategories:\n"
+        "  - name: decisions\n    purpose: decisions\n```\n",
+        encoding="utf-8")
+
+    # Pick a cwd that we'll synthesize as a Claude project slug
+    # Synthetic cwd string — used by the session-id slug derivation. We
+    # avoid using the real fixture path here to keep absolute private
+    # paths out of the smoke output (and out of any git-committed dump).
+    fake_cwd = "/synthetic/test/kata-session-fixture"
+    cwd_slug = fake_cwd.replace(":", "-").replace("/", "-")
+    proj_dir = sess_home / ".claude" / "projects" / cwd_slug
+    proj_dir.mkdir(parents=True)
+    sid = "12434e19-22b8-4e47-8f44-bdd606f9bbc7"
+    jsonl = proj_dir / f"{sid}.jsonl"
+
+    # Synthesize 4 events: user → assistant (with tool_use+result) → assistant text
+    events = [
+        {"type": "user", "role": "user", "timestamp": "2026-05-17T08:30:00Z",
+         "message": {"role": "user",
+                     "content": "Find the auth bug in src/server.ts"}},
+        {"type": "assistant", "role": "assistant",
+         "timestamp": "2026-05-17T08:30:15Z",
+         "message": {"role": "assistant", "content": [
+             {"type": "text", "text": "Let me read the file."},
+             {"type": "tool_use", "name": "Read"},
+         ]}},
+        {"type": "tool", "role": "tool",
+         "timestamp": "2026-05-17T08:30:16Z",
+         "message": {"role": "tool", "content": [
+             {"type": "tool_result", "content": [
+                 {"type": "text", "text": "line 1\nline 2\nline 3"}
+             ]}
+         ]}},
+        {"type": "assistant", "role": "assistant",
+         "timestamp": "2026-05-17T08:31:00Z",
+         "message": {"role": "assistant", "content":
+                     "Root cause: missing await on token refresh. "
+                     "Decision: add explicit `await` and a regression test."}},
+        # Decorative event that should be filtered
+        {"type": "file-history-snapshot", "ts": "2026-05-17T08:31:01Z"},
+    ]
+    with jsonl.open("w", encoding="utf-8") as f:
+        for ev in events:
+            f.write(json.dumps(ev) + "\n")
+
+    # detect with HOME override + CLAUDECODE=1
+    env_overrides = {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_SESSION_ID": sid,
+        "HOME": str(sess_home),
+        "USERPROFILE": str(sess_home),
+    }
+    det = run_with_env(
+        [str(SCRIPTS / "session_ingest.py"), "detect", "--cwd", fake_cwd],
+        env_overrides=env_overrides,
+    )
+    assert_eq("detect cli", det["cli"], "claude-code")
+    assert_eq("detect mode", det["detection_mode"], "jsonl-read")
+    assert_eq("detect session_id", det["session_id"], sid)
+    assert det["session_file"] and "12434e19" in det["session_file"], \
+        f"session_file should resolve to fixture jsonl; got {det['session_file']}"
+    print("  ok  detect probed CLAUDECODE=1 + slug-of-cwd → jsonl fixture")
+
+    # dump end-to-end
+    dmp = run_with_env(
+        [str(SCRIPTS / "session_ingest.py"), "dump",
+         "--wiki", str(sess_wiki),
+         "--cli", "claude-code",
+         "--session-file", str(jsonl),
+         "--session-id", sid,
+         "--cwd", fake_cwd],
+        env_overrides={"HOME": str(sess_home), "USERPROFILE": str(sess_home)},
+    )
+    assert_eq("dump cli", dmp["cli"], "claude-code")
+    assert_ge("dump event_count ≥ 5", dmp["event_count"], 5)
+    assert_ge("dump message_count ≥ 3", dmp["message_count"], 3)
+    out_path = Path(dmp["dump_path"])
+    assert out_path.is_file(), f"dump file not written: {out_path}"
+    dump_text = out_path.read_text(encoding="utf-8")
+    assert "type: session-dump" in dump_text, \
+        f"frontmatter type missing: {dump_text[:300]}"
+    assert "source_cli: claude-code" in dump_text
+    assert f"session_id: {sid}" in dump_text
+    assert "session-msg-1" in dump_text, "first message anchor missing"
+    assert "Root cause: missing await" in dump_text, \
+        "conclusion text from last assistant turn should be preserved"
+    assert "file-history-snapshot" not in dump_text, \
+        "decorative event leaked into dump"
+    print("  ok  jsonl-read parsed 4 events → dump with frontmatter, "
+          "msg anchors, and conclusion text; decorative event filtered")
+
+    print("\nTest 24: v1.11 session-ingest — Codex CLI cwd-match resolution")
+    # Synthesize ~/.codex/sessions/{YYYY}/{MM}/{DD}/rollout-*.jsonl with a
+    # session_meta payload.cwd matching our fixture cwd.
+    sess_home2 = FIXTURE.parent / "_session_codex_home"
+    if sess_home2.exists():
+        _windows_safe_rmtree(sess_home2)
+    today = datetime.datetime.now()
+    codex_day = (sess_home2 / ".codex" / "sessions"
+                 / f"{today.year:04d}" / f"{today.month:02d}"
+                 / f"{today.day:02d}")
+    codex_day.mkdir(parents=True)
+    codex_jsonl = codex_day / "rollout-2026-05-17T08-30-00-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl"
+    codex_events = [
+        {"type": "session_meta", "payload": {"cwd": fake_cwd}},
+        {"type": "user_message", "payload": {"content": "What's the bug?"},
+         "timestamp": "2026-05-17T08:35:00Z"},
+        {"type": "assistant_message",
+         "payload": {"content": "Found it: race in publishLocalStream."},
+         "timestamp": "2026-05-17T08:35:10Z"},
+        {"type": "tool_call", "payload": {"name": "Read", "arguments": "{}"},
+         "timestamp": "2026-05-17T08:35:15Z"},
+    ]
+    with codex_jsonl.open("w", encoding="utf-8") as f:
+        for ev in codex_events:
+            f.write(json.dumps(ev) + "\n")
+
+    # Explicit empty CLAUDECODE — the test runner may be running INSIDE Claude
+    # Code (pre-commit hook + dev shell), so the parent's CLAUDECODE=1 would
+    # otherwise leak in and short-circuit the detection ladder before reaching
+    # Codex. Same defense for CLAUDE_CODE_SESSION_ID.
+    codex_env = {
+        "HOME": str(sess_home2),
+        "USERPROFILE": str(sess_home2),
+        "CLAUDECODE": "",
+        "CLAUDE_CODE_SESSION_ID": "",
+    }
+    det2 = run_with_env(
+        [str(SCRIPTS / "session_ingest.py"), "detect", "--cwd", fake_cwd],
+        env_overrides=codex_env,
+    )
+    assert_eq("codex detect cli", det2["cli"], "codex-cli")
+    assert_eq("codex detect mode", det2["detection_mode"], "jsonl-read")
+    assert det2["session_file"] and "rollout-2026-05-17" in det2["session_file"], \
+        f"codex cwd-match should pick fixture rollout; got {det2['session_file']}"
+    print("  ok  codex detect picked rollout by session_meta.payload.cwd match")
+
+    # dump the Codex session
+    dmp2 = run_with_env(
+        [str(SCRIPTS / "session_ingest.py"), "dump",
+         "--wiki", str(sess_wiki),
+         "--cli", "codex-cli",
+         "--session-file", str(codex_jsonl),
+         "--session-id", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+         "--cwd", fake_cwd],
+        env_overrides=codex_env,
+    )
+    out2 = Path(dmp2["dump_path"])
+    text2 = out2.read_text(encoding="utf-8")
+    assert "source_cli: codex-cli" in text2
+    assert "race in publishLocalStream" in text2, \
+        "codex assistant content should be in dump body"
+    assert "Tool" in text2, "codex tool_call rendered as Tool section"
+    print("  ok  codex jsonl parsed: user + assistant + tool sections; "
+          "session_meta filtered")
+
+    print("\nTest 25: v1.11 session-ingest — dump-llm + config roundtrip")
+    sess_home3 = FIXTURE.parent / "_session_llm_home"
+    if sess_home3.exists():
+        _windows_safe_rmtree(sess_home3)
+    sess_home3.mkdir()
+
+    # dump-llm: feed body via --body argument (avoid stdin complexity in test)
+    body = (
+        "## User questions\n- Q1: How does X work?\n\n"
+        "## Decisions\n- D1: Use approach Y because Z\n\n"
+        "## Outcomes\n- O1: Bug F101 fixed in commit abc123\n"
+    )
+    dmp3 = run_with_env(
+        [str(SCRIPTS / "session_ingest.py"), "dump-llm",
+         "--wiki", str(sess_wiki),
+         "--cli", "gemini-cli",
+         "--session-id", "test-llm-001",
+         "--cwd", fake_cwd,
+         "--body", body],
+        env_overrides={"HOME": str(sess_home3), "USERPROFILE": str(sess_home3)},
+    )
+    out3 = Path(dmp3["dump_path"])
+    assert out3.is_file(), f"llm-dump path not written: {out3}"
+    text3 = out3.read_text(encoding="utf-8")
+    assert "source_cli: gemini-cli" in text3
+    assert "detection_mode: llm-dump" in text3
+    assert "Q1: How does X work?" in text3, \
+        "agent-supplied body should land verbatim"
+    print("  ok  dump-llm wraps agent body with frontmatter (cli, mode, sid)")
+
+    # Config roundtrip
+    cfg_show = run_with_env(
+        [str(SCRIPTS / "session_ingest.py"), "config", "show"],
+        env_overrides={"HOME": str(sess_home3), "USERPROFILE": str(sess_home3)},
+    )
+    assert cfg_show["config"]["auto_trigger_on_session_end"] is False, \
+        f"default auto_trigger should be false; got {cfg_show}"
+
+    cfg_set = run_with_env(
+        [str(SCRIPTS / "session_ingest.py"), "config", "set",
+         "auto_trigger_on_session_end", "true"],
+        env_overrides={"HOME": str(sess_home3), "USERPROFILE": str(sess_home3)},
+    )
+    assert_eq("config set value", cfg_set["value"], True)
+
+    cfg_get = run_with_env(
+        [str(SCRIPTS / "session_ingest.py"), "config", "get",
+         "auto_trigger_on_session_end"],
+        env_overrides={"HOME": str(sess_home3), "USERPROFILE": str(sess_home3)},
+    )
+    assert_eq("config get value after set", cfg_get["value"], True)
+    print("  ok  config show/set/get roundtrip via ~/.kata/session-ingest.yaml")
 
     print("\nAll smoke tests passed.")
     return 0

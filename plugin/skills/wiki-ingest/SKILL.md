@@ -2,7 +2,7 @@
 name: wiki-ingest
 description: "Ingest a source into the wiki: save raw content and referenced images, prompt the user for any custom frontmatter dimensions declared in SCHEMA.md, extract key information, create or update wiki pages per SCHEMA.md conventions, and update index.md and log.md."
 user-invocable: true
-argument-hint: "<url|file|text> [--batch] [--no-discuss] [--no-images] [--no-spec-preflight] [--set=key=value,...] [--page-type=<type>] [--proposed-path=<wiki-relative-path>] [--evidence-anchors=<comma-separated>]"
+argument-hint: "<url|file|text> [--batch] [--no-discuss] [--no-images] [--no-spec-preflight] [--set=key=value,...] [--page-type=<type>] [--proposed-path=<dest-path>] [--evidence-anchors=<comma-separated>]"
 ---
 
 # wiki-ingest

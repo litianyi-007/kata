@@ -4,6 +4,119 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.7.0] — 2026-05-18 — v1.11 session-ingest MVP (Phase 1-5)
+
+**The conversation-born knowledge channel.** Until v2.7.0 kata could
+only ingest artifacts (URLs, files, pasted text). The reasoning trail
+in a 2-hour debugging session — what was tried, what was rejected, why
+the chosen fix won — was never captured unless the user remembered to
+write it down. v1.11 closes that gap.
+
+### Added
+
+- **`wiki-session-ingest` skill** (`plugin/skills/wiki-session-ingest/SKILL.md`)
+  - One user-facing entry point that works from inside any of six
+    target CLIs without extra arguments
+  - Five phases: detect CLI → write raw dump → extract knowledge-point
+    candidates → multi-select → distill via `wiki-ingest`
+  - Multi-select UX via AskUserQuestion (Claude Code native) +
+    numbered-prompt fallback for terminal-only CLIs
+  - Provenance: every distilled page carries `source_cli`,
+    `session_id`, `cwd`, plus `evidence_anchors` pointing back into the
+    raw dump via `session-msg-N` ids
+  - Integration with `wiki-ingest` via the v2.6.0 hint flags
+    (`--page-type`, `--proposed-path`, `--evidence-anchors`) — single
+    source of truth for page-write; no duplicate ingest path
+
+- **`plugin/scripts/session_ingest.py`** helper (~600 lines, stdlib-only)
+  - **`detect`** subcommand — probes `$CLAUDECODE`, `$CODEX_SESSION_ID`,
+    `~/.codex/sessions/{YYYY}/{MM}/{DD}/` rollouts (cwd-match against
+    `session_meta.payload.cwd`), `$GEMINI_CLI` / `$COPILOT_CLI` /
+    `$OPENCODE` / `$KIMI_CLI` sentinels, falls back to `unknown` +
+    LLM-dump mode. Returns JSON with `cli`, `detection_mode`,
+    `session_id`, `session_file`.
+  - **`dump`** subcommand — parses Claude Code or Codex CLI JSONL into
+    readable markdown body (filters decorative events, renders tool
+    calls + outputs with head/tail truncation), wraps with frontmatter,
+    writes to `{wiki}/raw/sessions/{cli}-{date}-{slug}-{short-id}.md`.
+  - **`dump-llm`** subcommand — agent provides body via `--body` or
+    stdin; script wraps with frontmatter for Gemini / Copilot /
+    OpenCode / Kimi / unknown paths.
+  - **`config show|get|set`** subcommands — reads/writes
+    `~/.kata/session-ingest.yaml` (the per-machine
+    `auto_trigger_on_session_end` flag, default false).
+  - **Safety**: 50 MB session-size cap (exit code 2 + hint to narrow
+    scope), read-only on `~/.claude/projects/` and
+    `~/.codex/sessions/`, dirty-wiki guard documented in SKILL.
+
+- **Decision tree CLI detection** (PRD §CLI detection):
+  - Tier 1: `$CLAUDECODE == "1"` → Claude Code, JSONL adapter
+  - Tier 2: `$CODEX_SESSION_ID` set OR rollout under
+    `~/.codex/sessions/.../*` whose first-line
+    `session_meta.payload.cwd` matches cwd → Codex CLI, JSONL adapter
+    (cwd normalization handles Windows backslash + case)
+  - Tier 3-6: `$GEMINI_CLI` / `$COPILOT_CLI` / `$OPENCODE` /
+    `$KIMI_CLI` → LLM-dump mode
+  - Tier 7: unknown → LLM-dump fallback; agent renders the body
+
+- **Auto-trigger opt-in** at `~/.kata/session-ingest.yaml`
+  (`auto_trigger_on_session_end: false` by default). Documented hook
+  wiring for Claude Code's `Stop` hook + Codex equivalent; MVP does
+  NOT auto-install (one-command install is a v1.12 polish). Even with
+  the flag on, the multi-select step still runs — no silent writes.
+
+- **Tests 23, 24, 25** in `tests/run_smoke.py`:
+  - **Test 23**: Claude Code end-to-end — synthetic JSONL fixture with
+    user/assistant/tool/decorative events; HOME-overridden detect
+    finds the slug-of-cwd project dir; dump parses 4 messages, filters
+    `file-history-snapshot`, preserves conclusion text and message
+    anchors
+  - **Test 24**: Codex CLI cwd-match — synthetic rollout with
+    `session_meta.payload.cwd` matching fixture cwd; detect finds it
+    via the cwd-match heuristic (CLAUDECODE explicitly unset in env
+    overrides to prevent leak from parent Claude Code process); dump
+    parses user/assistant/tool events
+  - **Test 25**: LLM-dump path — agent-supplied body via `--body`
+    wrapped with frontmatter; `~/.kata/session-ingest.yaml`
+    show/set/get roundtrip on a tempdir HOME
+
+### Changed
+
+- Root `SKILL.md` frontmatter: "14 skills" → "15 skills (… spec /
+  session-ingest)"; description mentions v1.11 MVP shipped + Claude
+  Code + Codex adapters + LLM-dump fallback
+- Plugin manifest + marketplace.json bumped 2.6.0 → 2.7.0
+
+### Deferred to v1.12
+
+- Sentinel-env detection for Gemini / Copilot / OpenCode / Kimi
+  (LLM-dump remains the safe default until each is verified inside the
+  respective CLI)
+- Auto-wired CLI hooks (one-command install of Stop hook etc.) — MVP
+  only documents the wiring per CLI
+- Bulk historical session ingest (`--since=2026-05-01`)
+- Cross-CLI session merge (two CLIs working on the same task)
+- Token-budget-aware AI summarization for >200k-token sessions
+- `--scrub-secrets` flag to redact API-key-shaped tokens before the
+  raw dump is committed
+- Interactive editing of a candidate before distilling (title /
+  page_type / proposed_path tweak)
+
+### Migration
+
+None required. The new skill is purely additive; existing
+`wiki-ingest` flows are unaffected. To opt in to auto-trigger:
+
+```bash
+py -3 plugin/scripts/session_ingest.py config set \
+    auto_trigger_on_session_end true
+```
+
+Then wire a Claude Code `Stop` hook per the SKILL.md example, or the
+Codex CLI equivalent.
+
+---
+
 ## [2.6.0] — 2026-05-17 — v1.11 session-ingest Phase 0 (wiki-ingest hint flags)
 
 **Companion change** to unblock v1.11 `wiki-session-ingest` (Phase 1-5

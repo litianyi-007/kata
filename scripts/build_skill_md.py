@@ -117,11 +117,19 @@ def detect_drift(skills: list[dict], root_text: str) -> list[str]:
                 f"skill {s['name']!r} (defined in {s['path']}) not mentioned "
                 f"in root SKILL.md")
     skill_names = {s["name"] for s in skills}
-    found_in_root = set(re.findall(r"\bwiki-[a-z]+\b", root_text))
+    # Match multi-segment names like wiki-session-ingest, not just wiki-init.
+    found_in_root = set(re.findall(r"\bwiki-[a-z][a-z0-9-]*\b", root_text))
     extras = found_in_root - skill_names
     for name in extras:
-        # `wiki-plugins` refers to .wiki-plugins.yaml, not a skill.
-        if name in ("wiki-plugins",):
+        # Non-skill terms that legitimately appear in narrative text. Keep
+        # this list small — adding to it is the right move only when the
+        # term is structurally non-skill (file name, internal feature id).
+        if name in (
+            "wiki-plugins",          # .wiki-plugins.yaml config file
+            "wiki-import-lock",      # lock file name used by wiki-import
+            "wiki-import-checkpoint",# checkpoint file used by wiki-import
+            "wiki-ingest-queue",     # raw queue concept used by wiki-watch
+        ):
             continue
         drift.append(
             f"root SKILL.md mentions {name!r}, but no matching skill exists "
