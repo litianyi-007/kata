@@ -4,6 +4,95 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.8.0] — 2026-05-18 — v1.12 cross-wiki federation Phase 0 (MCP server scaffold)
+
+**First half of cross-wiki federation lands.** Kata wiki can now
+advertise itself as an MCP server over stdio. Any MCP-aware agent
+(Claude Code, Cursor, Continue, or another kata acting as a
+federation client in Phase 2+) can connect and call exposed
+read-only tools.
+
+PRD: `docs/PRD-v1.12-cross-wiki-federation.md` (Draft v2, Q1-Q4 locked).
+
+### Added
+
+- **`plugin/scripts/mcp_server.py`** — JSON-RPC 2.0 over stdio,
+  stdlib-only implementation:
+  - `initialize` handshake returns `protocolVersion: 2024-11-05` +
+    `serverInfo.kata.{wiki_id, wiki_path, domain, categories}` for
+    the v1.8-style identity check (federation peers verify
+    `wiki_id` matches their registry entry before trusting the peer
+    this session)
+  - `notifications/initialized` no-op
+  - `tools/list` returns the one Phase 0 tool: `wiki-search`
+  - `tools/call wiki-search` subprocesses `search_naive.py`,
+    returns both `content[0].text` (human-readable JSON dump) AND
+    `structuredContent` (the parsed envelope — custom kata
+    extension so federation clients don't re-parse)
+  - `shutdown` graceful exit
+  - Refuses to start without SCHEMA.md (exit 1 + stderr explains
+    why — no `wiki_id` = no identity check = unsafe to trust)
+  - 30-second per-call timeout on subprocess invocations
+- **`plugin/skills/wiki-mcp-server/SKILL.md`** — how to start the
+  server, how to register it with Claude Code's `.claude/settings.json`
+  `mcpServers:` block, how a federation client (v2.10.0+) will
+  spawn it, protocol surface reference, safety contract.
+- **Smoke tests T-mcp-1 through T-mcp-4** in `run_smoke.py`:
+  - T-mcp-1: server starts, handshake returns protocolVersion +
+    serverInfo
+  - T-mcp-2: `tools/call wiki-search` returns ranked results with
+    both text and structuredContent blocks; write skills NOT
+    exposed (negative test on `wiki-ingest`)
+  - T-mcp-3: `serverInfo.kata.wiki_id` is surfaced from SCHEMA.md
+    for federation identity check
+  - T-mcp-4: server refuses to start without SCHEMA.md (exit
+    non-zero + stderr explains)
+
+### Phase scope (what ships in v2.8.0 vs later)
+
+| Tool | Status (v2.8.0) | When |
+|---|---|---|
+| `wiki-search` | ✓ shipped | now |
+| `wiki-query` | not exposed | Phase 1 (v2.9.0) |
+| `wiki-graph` (read subset) | not exposed | Phase 1 (v2.9.0) |
+| `wiki-spec-preflight` | not exposed | Phase 1 (v2.9.0) |
+| Federation client side | not built | Phase 2 (v2.10.0) |
+| `kata://` URI scheme | not implemented | Phase 2 (v2.10.0) |
+| Cross-wiki spec preflight | not integrated | Phase 3 (v2.11.0) |
+
+**Never exposed** (hard boundary, by design): `wiki-ingest`,
+`wiki-import`, `wiki-tier --pin`, `wiki-dream --apply`, any other
+write skill. The MCP surface is read-only; cross-wiki write goes
+through explicit `wiki-import` against the peer's filesystem path.
+
+### Why this design
+
+Five transport candidates evaluated (PRD §"Why MCP and not the
+alternatives"); MCP won because **every consumer the user already
+runs is an MCP client** — Claude Code, Cursor, Continue, Codex CLI
+roadmap. Free interop with all of them; federation between two
+katas is then a specialization of "two MCP clients pointed at the
+same server."
+
+A2A protocol bridging is deferred (PRD §D1.3 / §"A2A: deferred, not
+blocked"). MCP surface is forward-compatible if an A2A wrapper
+becomes useful later.
+
+### Migration
+
+None required. The server is a new file, not exposed by default.
+To use it from Claude Code, add an entry to your
+`.claude/settings.json` `mcpServers:` block (see SKILL.md for the
+snippet). Existing kata workflows are unaffected.
+
+### Validation
+
+29 smoke tests pass (25 prior + 4 new MCP tests). Pre-commit hook
+clean. Manual: server spawned with `--wiki ~/.llm-wiki/X` responds
+to interactive JSON-RPC input.
+
+---
+
 ## [2.7.0] — 2026-05-18 — v1.11 session-ingest MVP (Phase 1-5)
 
 **The conversation-born knowledge channel.** Until v2.7.0 kata could

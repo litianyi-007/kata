@@ -1,7 +1,7 @@
 ---
 name: kata
-description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 15 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest). Spec History Management (v1.13) in Phase 0+2. v1.11 session-ingest MVP shipped — multi-CLI session distillation (Claude Code + Codex CLI jsonl adapters, LLM-dump fallback for the rest) feeds wiki-ingest via v2.6.0 hint flags."
-version: 2.7.0
+description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 16 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server). Spec History Management (v1.13) in Phase 0+2. v1.11 session-ingest MVP shipped. v1.12 cross-wiki federation Phase 0 shipped — kata wiki exposed as MCP server over stdio with wiki-search as first read-only tool."
+version: 2.8.0
 author: surebeli
 license: MIT
 ---
@@ -130,6 +130,7 @@ confirmation. See `PLUGINS.md` (or the `wiki-query` skill) for the full spec.
 | `wiki-ingest` | `<url\|file\|text> [--batch] [--no-discuss] [--no-images] [--no-spec-preflight] [--set=key=value,...] [--page-type=<type>] [--proposed-path=<dest-path>] [--evidence-anchors=<comma-separated>]` | Ingest a source into the wiki: save raw content and referenced images, prompt the user for any cust… |
 | `wiki-init` | `[--path=~/wiki] [--domain='AI research'] [--categories='a,b,c'] [--non-interactive] [--set-tags='a,b,c'] [--set-active-days=N] [--set-archived-days=N] [--set-driving-field=published_at\|ingested_at] [--set-dimension='name:type:required:refresh_on'] [--enable-dreaming] [--enable-sync] [--refresh-id [--force]]` | Interactive bootstrap for a new LLM wiki: ask about domain, propose categories that fit, write a cu… |
 | `wiki-lint` | `[--fix] [--report-only] [--check=orphans\|links\|frontmatter\|stale\|index\|tags\|size\|gaps\|schema\|tiers\|dimensions]` | Health-check the wiki: structural checks (orphans, broken links, frontmatter, stale content, tier c… |
+| `wiki-mcp-server` | `[--wiki=<path>] [--transport=stdio]` | Run a kata wiki as a Model Context Protocol (MCP) server over stdio. Any MCP-aware agent (Claude Co… |
 | `wiki-query` | `<question> [--file] [--format=markdown\|table\|slides\|chart\|canvas] [--tier=active\|all\|archived\|frozen] [--external] [--no-external] [--auto-external]` | Answer a question using the wiki's compiled knowledge. Searches relevant pages, synthesizes with ci… |
 | `wiki-search` | `<query> [--tag=<tag>] [--type=entity\|concept\|comparison\|query] [--limit=10] [--tier=active\|all\|archived\|frozen]` | Search the wiki by keyword, tag, topic, or type. Returns ranked results with page summaries and mat… |
 | `wiki-session-ingest` | `[--session-id <id>] [--session-file <path>] [--cli <name>] [--max-tool-output-lines N] [--auto-trigger]` | Ingest the active AI CLI session into the wiki: detect which CLI you're in (Claude Code / Codex CLI… |

@@ -2643,6 +2643,178 @@ exit 0
     assert_eq("config get value after set", cfg_get["value"], True)
     print("  ok  config show/set/get roundtrip via ~/.kata/session-ingest.yaml")
 
+    print("\nTest 26-29: v1.12 Phase 0 — MCP server (T-mcp-1..4)")
+    # Build a tiny fixture wiki with SCHEMA.md (wiki_id required) + one page
+    mcp_wiki = FIXTURE.parent / "_mcp_phase0_wiki"
+    if mcp_wiki.exists():
+        _windows_safe_rmtree(mcp_wiki)
+    mcp_wiki.mkdir(parents=True)
+    (mcp_wiki / "entities").mkdir()
+    (mcp_wiki / "SCHEMA.md").write_text(
+        "## Identity\n\n```yaml\nwiki_id: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee\n```\n\n"
+        "## Domain\n\nMCP smoke fixture\n\n"
+        "## Categories\n\n```yaml\ncategories:\n  - name: entities\n    purpose: entities\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 365\n  archived_days: 730\n"
+        "  driving_field: published_at\n```\n",
+        encoding="utf-8")
+    (mcp_wiki / "index.md").write_text(
+        "# Index\n\n## Entities\n- [Attention](entities/attention.md) - mechanism\n",
+        encoding="utf-8")
+    (mcp_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+    (mcp_wiki / "entities" / "attention.md").write_text(
+        "---\ntitle: Attention\ntype: entities\ntags: [transformer, attention]\n"
+        "published_at: 2026-05-10\n---\n\n# Attention\n\nMechanism behind transformers.\n",
+        encoding="utf-8")
+
+    def _mcp_call(server_proc, messages: list, expect_replies: int) -> list:
+        """Write messages to server stdin; read N replies. Each message and
+        reply is one line of JSON."""
+        for m in messages:
+            server_proc.stdin.write(json.dumps(m) + "\n")
+        server_proc.stdin.flush()
+        replies = []
+        for _ in range(expect_replies):
+            line = server_proc.stdout.readline()
+            if not line:
+                break
+            replies.append(json.loads(line))
+        return replies
+
+    # T-mcp-4 (negative): server refuses without SCHEMA.md
+    no_schema = FIXTURE.parent / "_mcp_no_schema"
+    if no_schema.exists():
+        _windows_safe_rmtree(no_schema)
+    no_schema.mkdir()
+    proc_neg = subprocess.run(
+        [sys.executable, str(SCRIPTS / "mcp_server.py"), "--wiki", str(no_schema)],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "PYTHONUTF8": "1"},
+        timeout=10,
+    )
+    assert proc_neg.returncode != 0, \
+        f"server should exit non-zero without SCHEMA.md; got {proc_neg.returncode}"
+    assert "SCHEMA.md" in proc_neg.stderr, \
+        f"stderr should mention SCHEMA.md; got: {proc_neg.stderr[:200]}"
+    print("  ok  T-mcp-4: server refuses to start without SCHEMA.md "
+          "(exit non-zero + stderr names the missing file)")
+
+    # T-mcp-1, 2, 3: start server, run full handshake + tools/list + tools/call
+    server = subprocess.Popen(
+        [sys.executable, str(SCRIPTS / "mcp_server.py"), "--wiki", str(mcp_wiki)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", bufsize=1,
+        env={**os.environ, "PYTHONUTF8": "1"},
+    )
+    try:
+        # initialize handshake
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+             "params": {"protocolVersion": "2024-11-05",
+                        "clientInfo": {"name": "smoke-test", "version": "0.1"},
+                        "capabilities": {}}},
+        ], expect_replies=1)
+        init_reply = replies[0]
+        assert init_reply.get("id") == 1, f"id mismatch: {init_reply}"
+        assert "result" in init_reply, f"init failed: {init_reply}"
+        result = init_reply["result"]
+        assert_eq("init protocolVersion", result["protocolVersion"], "2024-11-05")
+        server_info = result["serverInfo"]
+        assert_eq("init server name", server_info["name"], "kata-wiki")
+        # T-mcp-3: wiki_id surfaced from SCHEMA.md
+        assert "kata" in server_info, f"serverInfo missing kata block: {server_info}"
+        assert_eq("init wiki_id from SCHEMA.md",
+                  server_info["kata"]["wiki_id"],
+                  "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")
+        # NOTE: load_schema() only parses YAML code blocks; `## Domain`
+        # plain-text headings (the current kata convention) aren't
+        # extracted, so server_info.kata.domain may be empty for typical
+        # wikis. The wiki_id check above is the load-bearing one for
+        # federation identity. Categories are in a YAML block → extracted.
+        assert "entities" in server_info["kata"]["categories"], \
+            f"categories should include 'entities'; got {server_info['kata']['categories']}"
+        print("  ok  T-mcp-1: server starts, initialize handshake succeeds, "
+              "protocolVersion + serverInfo returned")
+        print("  ok  T-mcp-3: serverInfo.kata.wiki_id surfaced from SCHEMA.md "
+              "for federation identity check")
+
+        # initialized notification (no reply expected) + tools/list
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        ], expect_replies=1)
+        tools_reply = replies[0]
+        assert "result" in tools_reply, f"tools/list failed: {tools_reply}"
+        tools = tools_reply["result"]["tools"]
+        assert_eq("tools count (Phase 0 = wiki-search only)", len(tools), 1)
+        assert_eq("tool name", tools[0]["name"], "wiki-search")
+        assert "query" in tools[0]["inputSchema"]["properties"], \
+            f"wiki-search inputSchema must have 'query'; got {tools[0]['inputSchema']}"
+
+        # T-mcp-2: tools/call wiki-search
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+             "params": {"name": "wiki-search",
+                        "arguments": {"query": "attention", "limit": 5}}},
+        ], expect_replies=1)
+        call_reply = replies[0]
+        assert "result" in call_reply, f"tools/call failed: {call_reply}"
+        call_result = call_reply["result"]
+        assert call_result.get("isError") is False, \
+            f"tool result marked as error: {call_result}"
+        # Both content blocks and structuredContent populated
+        assert "content" in call_result and len(call_result["content"]) >= 1
+        text_block = call_result["content"][0]
+        assert_eq("first content block type", text_block["type"], "text")
+        structured = call_result["structuredContent"]
+        assert "results" in structured, \
+            f"structuredContent missing results: {structured}"
+        # "attention" should be found in entities/attention.md
+        assert structured["total"] >= 1, \
+            f"wiki-search should find ≥1 result for 'attention'; got {structured}"
+        attn_hit = next((r for r in structured["results"]
+                         if "attention" in r.get("path", "")), None)
+        assert attn_hit is not None, \
+            f"attention page should appear in results; got {[r.get('path') for r in structured['results']]}"
+        print("  ok  T-mcp-2: tools/call wiki-search returns ranked results "
+              "(text block + structuredContent both populated; "
+              "fixture's attention.md hit)")
+
+        # Negative: unknown tool returns method-not-found-style error
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+             "params": {"name": "wiki-ingest",  # write skill, should NOT exist
+                        "arguments": {"source": "/tmp/foo.md"}}},
+        ], expect_replies=1)
+        err_reply = replies[0]
+        assert "error" in err_reply, \
+            f"calling wiki-ingest should error (write skills not exposed); got {err_reply}"
+        assert "wiki-ingest" in err_reply["error"]["message"] or \
+               "unknown tool" in err_reply["error"]["message"], \
+            f"error should name the missing tool; got {err_reply}"
+        print("  ok  T-mcp-2 (negative): write-skills NOT exposed — "
+              "tools/call wiki-ingest returns unknown-tool error")
+
+        # shutdown
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 5, "method": "shutdown"},
+        ], expect_replies=1)
+        assert "result" in replies[0], f"shutdown failed: {replies[0]}"
+    finally:
+        try:
+            server.stdin.close()
+        except Exception:
+            pass
+        try:
+            server.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server.terminate()
+            server.wait(timeout=5)
+
+    assert server.returncode == 0, \
+        f"server should exit 0 after EOF; got {server.returncode}"
+    print("  ok  server exits 0 on stdin EOF (clean shutdown)")
+
     print("\nAll smoke tests passed.")
     return 0
 
