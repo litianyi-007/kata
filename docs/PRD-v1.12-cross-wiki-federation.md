@@ -1,7 +1,7 @@
 # PRD v1.12 — Cross-wiki federation via MCP (query-only)
 
-Status: Draft v1
-Date: 2026-05-18
+Status: Draft v2 — round-1 open questions closed
+Date: 2026-05-18 (round-2 2026-05-18)
 Author: surebeli
 
 ## Context
@@ -56,7 +56,7 @@ answer for cross-source needs. This PRD makes that reference real.
   `wiki-import` against B's exported page — same single-source-of-truth
   rule as v2.5.0.
 - **Discoverability** through a small per-machine registry file
-  `~/.llm-wiki/federation.yaml`. Listing a wiki there = declaring trust;
+  `{wiki_path}/.federation.yaml`. Listing a wiki there = declaring trust;
   removing = revoking.
 
 ## Non-goals
@@ -252,14 +252,14 @@ Versioning: v2.9.0.
 
 Kata becomes an MCP client too: when `wiki-query` is invoked locally
 in kata A, it also fans out to katas listed in A's
-`~/.llm-wiki/federation.yaml`, merges responses, sorts by score,
+`{wiki_path}/.federation.yaml`, merges responses, sorts by score,
 preserves provenance. New `kata://<name|wiki_id>/<path>` URI scheme
 for citations in `spec_relationships:`, query results, and free-form
 references.
 
 Deliverables:
 - `plugin/scripts/federation_client.py` — MCP client wrapper
-- `~/.llm-wiki/federation.yaml` schema + reader
+- `{wiki_path}/.federation.yaml` schema + reader
 - `kata://` URI parser + resolver
 - `wiki-query` skill grows `--federate` flag (default on if
   federation.yaml exists; off if not)
@@ -304,7 +304,7 @@ Where `<name-or-wiki-id>` is either:
   (`kata://b2f6d18e-2eb6-4b75-9d40-c92a4f1d5e83/decisions/F011.md`)
 
 Resolution:
-1. Try name match first against `~/.llm-wiki/federation.yaml` `name:`
+1. Try name match first against `{wiki_path}/.federation.yaml` `name:`
    fields
 2. If no match and the part is UUIDv4-shaped, try `wiki_id:` match
 3. If still no match → unresolvable (citation kept verbatim; queries
@@ -320,12 +320,23 @@ external data, but:
   the above. The other side is itself self-closing; we're just
   consuming its query API. No new lifecycle invented.
 
-### `~/.llm-wiki/federation.yaml`
+### `{wiki_path}/.federation.yaml`
 
-Per-machine, gitignored by convention. Lists trusted peer kata wikis.
+**Per-wiki**, in the wiki root. Each kata wiki has its own peer
+registry — wiki A can federate with X+Y while wiki B federates with
+only Y. Locked per Q1 review (2026-05-18): asymmetric peering is a
+feature, not a complication.
+
+The file is normally git-tracked alongside the wiki (no secrets — just
+peer slugs + endpoints + wiki_id UUIDs). Multi-machine sync via
+v1.8 carries it forward like any other wiki file. Per-machine
+endpoint overrides (e.g. stdio paths that differ per OS) are handled
+inside each entry via the existing `wiki_id`-keyed
+machine-fingerprint mechanism v1.10 introduced (out of scope for
+this PRD; addressed when stdio endpoints across machines need it).
 
 ```yaml
-# ~/.llm-wiki/federation.yaml
+# {wiki_path}/.federation.yaml
 peers:
   - name: necallkit
     wiki_id: 7b52f6df-d7cf-47ab-b980-6042cf3a675c
@@ -338,7 +349,7 @@ peers:
       - "~/.llm-wiki/NECallKit"
     description: "NECallKit project wiki (local)"
     enabled: true
-    timeout_seconds: 3
+    timeout_seconds: 5
     capabilities:
       - wiki-search
       - wiki-query
@@ -350,7 +361,7 @@ peers:
     url: "http://patterns-kata.local:8765/mcp"
     description: "Shared patterns kata (team-wide)"
     enabled: true
-    timeout_seconds: 5
+    timeout_seconds: 8
 ```
 
 Schema fields:
@@ -415,7 +426,7 @@ respond.
 
 ### Trust is local-config
 
-`~/.llm-wiki/federation.yaml` is the **only** trust surface in v1.12.
+`{wiki_path}/.federation.yaml` is the **only** trust surface in v1.12.
 A peer is trusted iff:
 - It appears in the local registry with `enabled: true`
 - Its first-connect `wiki_id` matches the registry's expected `wiki_id`
@@ -486,7 +497,7 @@ py -3 plugin/scripts/mcp_server.py --wiki ~/.llm-wiki/NECallKit \
 ### Client side (federation in `wiki-query`)
 
 ```bash
-# Default: if ~/.llm-wiki/federation.yaml exists and has any
+# Default: if {wiki_path}/.federation.yaml exists and has any
 # enabled peer, federation is on
 /kata:wiki-query "How does payment flow work?"
 
@@ -621,84 +632,57 @@ ingest it through the existing import skill — don't invent a parallel
 "federation pull" surface.
 
 **D1.7 — Local-config trust, no remote auth.**
-`~/.llm-wiki/federation.yaml` is the only trust surface for MVP.
+`{wiki_path}/.federation.yaml` is the only trust surface for MVP.
 Appropriate for single-user multi-wiki + same-org cross-team.
 Out-of-scope for arbitrary-internet federation; that's a v1.12+
 extension if there's demand.
 
-## Open questions (for review)
+### Round 2 — 2026-05-18 (Q1-Q4 locked)
 
-### Q1 — federation.yaml location: `~/.llm-wiki/` vs `{wiki_path}/`?
+**D2.1 — `.federation.yaml` is per-wiki.**
+Located at `{wiki_path}/.federation.yaml`, not in `~/.llm-wiki/`.
+Different wikis can federate with different peers — wiki A peers with
+X+Y while wiki B peers with only Y. Asymmetric peering is a feature,
+not an oversight. The file is normally git-tracked alongside the wiki
+(no secrets, just slugs + endpoints + wiki_id UUIDs) and rides
+forward via v1.8 sync like any other wiki file. Per-machine endpoint
+overrides (e.g. when a stdio command path differs across OSes) are
+handled inside individual entries via the existing `wiki_id`-keyed
+machine-fingerprint mechanism from v1.10 — out of scope for v1.12
+MVP unless a real cross-platform setup demands it.
 
-Options:
-- **(a)** `~/.llm-wiki/federation.yaml` — per-machine, applies to all
-  kata wikis on this machine. Simpler, fewer files.
-- **(b)** `{wiki_path}/.federation.yaml` — per-wiki. Allows
-  per-project peering decisions; one wiki can federate with X+Y,
-  another with Y+Z.
-- **(c)** Both, with per-wiki overriding per-machine.
+**D2.2 — `kata://` URI: name-first daily, wiki_id-form for long-lived.**
+Daily use writes names (`kata://necallkit/decisions/F011.md`) for
+readability. For long-lived citations in `spec_relationships:`,
+synced wiki pages, or anything that travels across machines, the
+skills prompt the author to use the wiki_id form
+(`kata://7b52f6df-.../decisions/F011.md`) instead. Resolution order
+in the URI parser: name first, fall back to wiki_id-shaped UUIDv4.
+The storage layer does NOT auto-normalize to wiki_id — the author's
+chosen form is preserved verbatim.
 
-Currently drafted as (a). (b) is more flexible but adds complexity.
-(c) is most flexible but most surface. Lean (a) for MVP, escalate if
-real use demands per-wiki.
+**D2.3 — Trust is explicit only; no TOFU prompts.**
+A peer is trusted iff it appears in the local `.federation.yaml`
+with `enabled: true`. No trust-on-first-use prompt path. If a
+federated query returns a result containing a `kata://X/...` URI and
+X isn't in the local registry, the URI is treated as unresolvable
+and surfaced in the result's `federation:` diagnostic block as such.
+Adding a peer is a deliberate `/kata:wiki-federation add` action (or
+a manual edit). Rationale: explicit beats clever for trust; TOFU has
+a long history of accidentally building bad-habit pathways.
+Reconsider only if a real workflow surfaces where TOFU's friction is
+prohibitive and the security cost is bounded.
 
-### Q2 — `kata://` URI: name-first or wiki_id-first?
-
-The PRD says "try name first, fall back to wiki_id." Two concerns:
-- **Name collision**: two registry entries with the same name? Schema
-  forbids it (`unique within the registry`), but cross-machine: if A
-  has `kata://necallkit/...` in a synced wiki page and B's registry
-  doesn't have a `necallkit` entry, the URI is unresolvable on B.
-- **Identity stability**: name is editable; wiki_id is immutable.
-  Long-lived citations should arguably use wiki_id even though it's
-  uglier.
-
-Two sub-options:
-- **(a)** Recommend names for daily use, wiki_id for long-lived
-  citations (decisions / spec_relationships). Skill prompts ask which
-  form when adding a peer-citation.
-- **(b)** Always normalize to wiki_id in stored citations; render as
-  `name` in UI. Adds a normalization layer but more robust.
-
-Lean (a) for MVP.
-
-### Q3 — Trust model: per-machine config vs CLI prompt at first use?
-
-For MVP, federation.yaml is the explicit trust list. But a UX
-alternative: when wiki-query encounters an unknown peer (e.g. an
-already-cited `kata://X/...` URI in a federated query result), prompt
-"Trust X (wiki_id=...) for this session?" with a "remember"
-option that writes to federation.yaml.
-
-- **(a)** Explicit only — user edits federation.yaml directly or via
-  `/kata:wiki-federation add`
-- **(b)** TOFU (trust-on-first-use) — auto-prompt on first encounter
-
-Lean (a) for MVP — explicit beats clever for trust. (b) is a v1.12+
-polish.
-
-### Q4 — Error handling: timeout default + retry?
-
-Drafted: 3-second per-peer timeout, no retry, local-only fallback.
-
-Concerns:
-- 3s might be too tight for stdio spawn on cold first call (Python
-  interpreter startup + module loading)
-- No retry means flaky peers permanently fall out of every query
-  until the user reruns
-
-Options:
-- **(a)** 3s no retry (current draft)
-- **(b)** 3s with 1 retry on timeout
-- **(c)** First-call 10s (spawn cost), subsequent 3s
-- **(d)** Per-peer configurable in federation.yaml (already drafted as
-  `timeout_seconds`; just doc that 10s for stdio is reasonable on
-  cold spawn)
-
-(d) is essentially the same as (a) since the field exists; the
-question is the **default value** to ship. Lean (d) with default
-`timeout_seconds: 5` (compromise) and recommend 10 for stdio in
-docs.
+**D2.4 — Timeout 5s default, no retry, per-peer adjustable.**
+`timeout_seconds: 5` is the default in the registry schema —
+balancing stdio cold-spawn cost (Python interpreter + module load)
+against tight fan-out latency budgets. No retry on timeout — flaky
+peers fall out of the current query and are marked in
+`federation.peers_timed_out`; they'll be retried on the next user
+query naturally. Per-peer override via the existing
+`timeout_seconds` field. Docs recommend `10` for heavy stdio peers
+(large wikis loading hub graph at boot), `3` for low-latency SSE
+peers.
 
 ## Risks
 
