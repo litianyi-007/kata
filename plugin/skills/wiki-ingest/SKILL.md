@@ -2,7 +2,7 @@
 name: wiki-ingest
 description: "Ingest a source into the wiki: save raw content and referenced images, prompt the user for any custom frontmatter dimensions declared in SCHEMA.md, extract key information, create or update wiki pages per SCHEMA.md conventions, and update index.md and log.md."
 user-invocable: true
-argument-hint: "<url|file|text> [--batch] [--no-discuss] [--no-images] [--no-spec-preflight] [--set=key=value,...]"
+argument-hint: "<url|file|text> [--batch] [--no-discuss] [--no-images] [--no-spec-preflight] [--set=key=value,...] [--page-type=<type>] [--proposed-path=<wiki-relative-path>] [--evidence-anchors=<comma-separated>]"
 ---
 
 # wiki-ingest
@@ -210,6 +210,46 @@ growing wiki and a pile of duplicates.
 new info conflicts with existing content: note both claims with dates, add a
 `contradictions:` frontmatter field referencing the other page, and flag for user
 review.
+
+### ④b Optional hint flags from upstream skills (v1.11 Phase 0)
+
+Three optional flags let an upstream skill (e.g. `wiki-session-ingest`) hand
+off structured hints rather than re-deriving them. All three are strictly
+additive — unset behavior matches the inference path described above.
+
+- **`--page-type=<type>`** — strong default for page type. Use this value
+  unless SCHEMA.md analysis reveals a clear mismatch (e.g. the source body
+  is obviously a `lesson` but the upstream hinted `decision` — in that case,
+  follow SCHEMA.md and note the override in the report). Common values:
+  `decision`, `feature`, `bug`, `lesson`, `concept`, `prd`, `rfc`, `adr`,
+  `task-spec`. Must be one SCHEMA.md actually declares.
+- **`--proposed-path=<wiki-relative-path>`** — preferred wiki-relative
+  destination (e.g. `decisions/F100-payment-rewrite.md`). Treat as a hint,
+  not a command:
+  - If the path is free, use it as-is
+  - If a page already exists there, apply the standard "create vs update"
+    policy from step ④ above (default: update existing with diff preview)
+  - If the path conflicts with SCHEMA.md's category policy (e.g. hint says
+    `decisions/foo.md` but `decisions` doesn't exist as a category), fall
+    back to inference and note the override
+- **`--evidence-anchors=<comma-separated>`** — opaque tokens the upstream
+  skill wants preserved in the new page's frontmatter under
+  `evidence_anchors:`. Write verbatim, no normalization. Typical values:
+  `session-msg-142,session-msg-167` (session-ingest message indices), or
+  any caller-defined token. The field is omitted entirely when the flag
+  is unset.
+
+Example invocation by `wiki-session-ingest` (Phase 5 distill loop):
+
+```
+wiki-ingest raw/sessions/claude-code-2026-05-17-foo-12434e19.md \
+    --page-type=decision \
+    --proposed-path=decisions/llm-wiki-yaml-single-path-cache.md \
+    --evidence-anchors=session-msg-142,session-msg-167
+```
+
+Per step ⑦ Report, surface any hint that was overridden so the upstream
+caller can audit what landed vs what was requested.
 
 ### ⑤ Cross-reference both ways
 

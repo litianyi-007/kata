@@ -4,6 +4,53 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.6.0] — 2026-05-17 — v1.11 session-ingest Phase 0 (wiki-ingest hint flags)
+
+**Companion change** to unblock v1.11 `wiki-session-ingest` (Phase 1-5
+shipping in v2.7.0). Three strictly-additive optional flags on the
+`wiki-ingest` skill let an upstream caller hand off structured hints
+rather than re-deriving them.
+
+### Added
+
+- **`--page-type=<type>`** — strong default for new-page type
+  (`decision` / `feature` / `bug` / `lesson` / `concept` / `prd` /
+  `rfc` / `adr` / `task-spec` / etc; must be SCHEMA.md-declared). Agent
+  follows the hint unless SCHEMA.md analysis reveals a clear mismatch,
+  in which case it overrides and notes the override in the report.
+- **`--proposed-path=<wiki-relative>`** — preferred destination path
+  for the new page. Treated as a hint, not a command:
+  - Free path → used as-is
+  - Existing page → standard "create vs update" policy applies
+    (default: update with diff preview)
+  - SCHEMA.md category conflict → fall back to inference, note override
+- **`--evidence-anchors=<comma-separated>`** — opaque tokens preserved
+  verbatim in the new page's frontmatter under `evidence_anchors:`.
+  Typical: `session-msg-142,session-msg-167` from v1.11
+  session-ingest. Field omitted entirely when flag unset.
+
+All three flags are documented in `plugin/skills/wiki-ingest/SKILL.md`
+under new sub-step **④b** (between page-write and cross-reference).
+Existing `wiki-ingest <url|file|text>` invocation shape is unchanged;
+all hints are optional.
+
+### Why
+
+v1.11 `wiki-session-ingest` (Draft v2 locked PRD) needs to invoke
+`wiki-ingest` per knowledge-point candidate during its Phase 5 distill
+loop, with structured hints so each candidate lands at the right path
+under the right type with provenance anchors preserved. Without Phase 0,
+`wiki-session-ingest` would have to either re-implement page-write logic
+(violating single-source-of-truth) or hand off without structured hints
+(losing precision).
+
+### Migration
+
+None required. All three flags are additive; existing wiki-ingest flows
+are unaffected.
+
+---
+
 ## [2.5.0] — 2026-05-17 — v1.13 SHM Phase 1 removed (external_sources)
 
 **Removes a feature shipped in v2.3.0 the previous day** because the
