@@ -1,6 +1,10 @@
 # Claude Code session-local settings (user-machine-specific)
 .claude/settings.local.json
 
+# Claude Code project MCP server config (contains absolute machine paths;
+# per-user, not portable across machines / CI).
+.mcp.json
+
 # Auto-generated session transcripts (Claude Code recovery)
 20*-*-this-session-is-being-continued-from-*.txt
 
