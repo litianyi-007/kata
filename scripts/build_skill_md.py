@@ -125,10 +125,11 @@ def detect_drift(skills: list[dict], root_text: str) -> list[str]:
         # this list small — adding to it is the right move only when the
         # term is structurally non-skill (file name, internal feature id).
         if name in (
-            "wiki-plugins",          # .wiki-plugins.yaml config file
-            "wiki-import-lock",      # lock file name used by wiki-import
-            "wiki-import-checkpoint",# checkpoint file used by wiki-import
-            "wiki-ingest-queue",     # raw queue concept used by wiki-watch
+            "wiki-plugins",            # .wiki-plugins.yaml config file
+            "wiki-import-lock",        # lock file name used by wiki-import
+            "wiki-import-checkpoint",  # checkpoint file used by wiki-import
+            "wiki-ingest-queue",       # raw queue concept used by wiki-watch
+            "wiki-spec-preflight",     # v1.12 MCP tool name (not a skill)
         ):
             continue
         drift.append(

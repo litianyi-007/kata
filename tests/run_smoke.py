@@ -2746,10 +2746,14 @@ exit 0
         tools_reply = replies[0]
         assert "result" in tools_reply, f"tools/list failed: {tools_reply}"
         tools = tools_reply["result"]["tools"]
-        assert_eq("tools count (Phase 0 = wiki-search only)", len(tools), 1)
-        assert_eq("tool name", tools[0]["name"], "wiki-search")
-        assert "query" in tools[0]["inputSchema"]["properties"], \
-            f"wiki-search inputSchema must have 'query'; got {tools[0]['inputSchema']}"
+        # v2.9.0 (Phase 1) expanded to 3 tools; wiki-search must still be
+        # one of them. Phase 1's full 3-tool assertion lives in T-mcp-8.
+        tool_names_p0 = {t["name"] for t in tools}
+        assert "wiki-search" in tool_names_p0, \
+            f"wiki-search must be exposed; got {tool_names_p0}"
+        search_tool = next(t for t in tools if t["name"] == "wiki-search")
+        assert "query" in search_tool["inputSchema"]["properties"], \
+            f"wiki-search inputSchema must have 'query'; got {search_tool['inputSchema']}"
 
         # T-mcp-2: tools/call wiki-search
         replies = _mcp_call(server, [
@@ -2856,6 +2860,174 @@ exit 0
         f"bad-page was skipped, must not appear in results; got {paths}"
     print("  ok  discover_pages skipped bad-frontmatter page + good-page "
           "still surfaced (no whole-scan abort)")
+
+    print("\nTest 31-34: v1.12 Phase 1 MCP tool surface (T-mcp-5..8)")
+    # Build a fixture wiki with cross-linked pages + a spec page, exercise
+    # the three Phase 1 tools through the live MCP server (same way Claude
+    # Code does in production).
+    mcp_p1_wiki = FIXTURE.parent / "_mcp_phase1_wiki"
+    if mcp_p1_wiki.exists():
+        _windows_safe_rmtree(mcp_p1_wiki)
+    (mcp_p1_wiki / "entities").mkdir(parents=True)
+    (mcp_p1_wiki / "decisions").mkdir()
+    (mcp_p1_wiki / "raw").mkdir()
+    (mcp_p1_wiki / "SCHEMA.md").write_text(
+        "## Identity\n\n```yaml\nwiki_id: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff\n```\n\n"
+        "## Domain\nphase1 fixture\n\n"
+        "## Categories\n\n```yaml\ncategories:\n  - name: entities\n"
+        "    purpose: entities\n  - name: decisions\n    purpose: decisions\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 365\n  archived_days: 730\n"
+        "  driving_field: published_at\n```\n\n"
+        "## Spec authoring\n\n```yaml\nspec_authoring:\n  enabled: true\n"
+        "  spec_types: [decisions]\n```\n",
+        encoding="utf-8")
+    (mcp_p1_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (mcp_p1_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+    # Cross-linked entities for graph queries
+    (mcp_p1_wiki / "entities" / "alpha.md").write_text(
+        "---\ntitle: Alpha\ntype: entities\ntags: [foo]\n"
+        "published_at: 2026-05-10\n---\n\n"
+        "Alpha refers to [[beta]] and [[gamma]].\n",
+        encoding="utf-8")
+    (mcp_p1_wiki / "entities" / "beta.md").write_text(
+        "---\ntitle: Beta\ntype: entities\ntags: [foo]\n"
+        "published_at: 2026-05-10\n---\n\n"
+        "Beta links to [[gamma]].\n",
+        encoding="utf-8")
+    (mcp_p1_wiki / "entities" / "gamma.md").write_text(
+        "---\ntitle: Gamma\ntype: entities\ntags: [bar]\n"
+        "published_at: 2026-05-10\n---\n\n"
+        "Gamma stands alone.\n",
+        encoding="utf-8")
+    # A decision for spec-preflight to find
+    (mcp_p1_wiki / "decisions" / "F100-payment-flow.md").write_text(
+        "---\ntitle: F100 Payment Flow\ntype: decisions\n"
+        "tags: [payment, checkout, billing]\n"
+        "published_at: 2026-05-10\n---\n\n"
+        "Decision on payment.\n",
+        encoding="utf-8")
+    # New spec draft for preflight to scan
+    new_draft = mcp_p1_wiki / "raw" / "draft-payment-rewrite.md"
+    new_draft.write_text(
+        "---\ntitle: Payment Flow Rewrite\ntype: decisions\n"
+        "tags: [payment, checkout, billing]\n---\n\n"
+        "Rewriting payment flow.\n",
+        encoding="utf-8")
+
+    server = subprocess.Popen(
+        [sys.executable, str(SCRIPTS / "mcp_server.py"), "--wiki", str(mcp_p1_wiki)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", bufsize=1,
+        env={**os.environ, "PYTHONUTF8": "1"},
+    )
+    try:
+        # initialize + check tier_distribution surfaces in serverInfo
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+             "params": {"protocolVersion": "2024-11-05",
+                        "clientInfo": {"name": "p1-test", "version": "0.1"},
+                        "capabilities": {}}},
+        ], expect_replies=1)
+        init_result = replies[0]["result"]
+        kata_info = init_result["serverInfo"]["kata"]
+        assert "tier_distribution" in kata_info, \
+            f"T-mcp-7: serverInfo.kata.tier_distribution missing: {kata_info}"
+        td = kata_info["tier_distribution"]
+        assert set(td.keys()) >= {"active", "archived", "frozen"}, \
+            f"tier_distribution must have all 3 tiers: {td}"
+        # All 4 fixture pages are 2026-05-10 (recent) → all active
+        assert_ge("T-mcp-7: tier_distribution.active counts fixture pages",
+                  td["active"], 4)
+        print("  ok  T-mcp-7: serverInfo.kata.tier_distribution surfaced "
+              f"({td['active']} active / {td['archived']} archived / "
+              f"{td['frozen']} frozen)")
+
+        # T-mcp-8: tools/list returns all 3 Phase 1 tools
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        ], expect_replies=1)
+        tools = replies[0]["result"]["tools"]
+        tool_names = {t["name"] for t in tools}
+        assert tool_names == {"wiki-search", "wiki-graph", "wiki-spec-preflight"}, \
+            f"T-mcp-8: Phase 1 must expose 3 tools; got {tool_names}"
+        print("  ok  T-mcp-8: tools/list returns all 3 Phase 1 tools "
+              "(wiki-search + wiki-graph + wiki-spec-preflight)")
+
+        # T-mcp-5: wiki-graph in multiple modes
+        # 5a: stats mode
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+             "params": {"name": "wiki-graph",
+                        "arguments": {"mode": "stats"}}},
+        ], expect_replies=1)
+        call_result = replies[0]["result"]
+        assert call_result.get("isError") is False, \
+            f"wiki-graph stats failed: {call_result}"
+        stats = call_result["structuredContent"]
+        assert_ge("graph stats page count ≥ 4", stats.get("pages", 0), 4)
+
+        # 5b: hubs mode — alpha links out twice, beta links to gamma; gamma is most-linked
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+             "params": {"name": "wiki-graph",
+                        "arguments": {"mode": "hubs", "limit": 5}}},
+        ], expect_replies=1)
+        hubs_result = replies[0]["result"]["structuredContent"]
+        # hubs_result shape may vary by graph_query.py; just confirm it ran
+        assert "hubs" in hubs_result or "pages" in hubs_result or \
+               "results" in hubs_result, \
+            f"hubs mode should return some structured result: {hubs_result}"
+
+        # 5c: invalid mode → INVALID_PARAMS
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+             "params": {"name": "wiki-graph",
+                        "arguments": {"mode": "destroy-the-wiki"}}},
+        ], expect_replies=1)
+        assert "error" in replies[0], \
+            f"unknown graph mode must error; got {replies[0]}"
+        # JSON-RPC 2.0 INVALID_PARAMS = -32602 (defined in mcp_server.py)
+        assert replies[0]["error"]["code"] == -32602, \
+            f"unknown mode should be INVALID_PARAMS (-32602); got {replies[0]['error']}"
+        print("  ok  T-mcp-5: wiki-graph stats + hubs work; invalid mode "
+              "returns INVALID_PARAMS")
+
+        # T-mcp-6: wiki-spec-preflight surfaces F100 candidate
+        replies = _mcp_call(server, [
+            {"jsonrpc": "2.0", "id": 6, "method": "tools/call",
+             "params": {"name": "wiki-spec-preflight",
+                        "arguments": {"new_spec_path": str(new_draft),
+                                      "limit": 5}}},
+        ], expect_replies=1)
+        pf_result = replies[0]["result"]
+        assert pf_result.get("isError") is False, \
+            f"wiki-spec-preflight failed: {pf_result}"
+        pf_envelope = pf_result["structuredContent"]
+        assert_ge("preflight candidates ≥ 1", pf_envelope.get("candidates_found", 0), 1)
+        f100 = next((c for c in pf_envelope["candidates"]
+                     if "F100-payment-flow" in c["path"]), None)
+        assert f100 is not None, \
+            f"F100 must surface as preflight candidate; got {[c['path'] for c in pf_envelope['candidates']]}"
+        # Advisory mode — no enforcement block (server doesn't expose --enforce)
+        assert "enforcement" not in pf_envelope, \
+            f"MCP-exposed preflight must NOT include enforcement block " \
+            f"(write-blocking doesn't translate cross-wiki); got {pf_envelope}"
+        print("  ok  T-mcp-6: wiki-spec-preflight surfaces F100; "
+              "enforcement block correctly absent (advisory-only across MCP)")
+    finally:
+        try:
+            server.stdin.close()
+        except Exception:
+            pass
+        try:
+            server.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server.terminate()
+            server.wait(timeout=5)
+    assert server.returncode == 0, \
+        f"Phase 1 server should exit 0 after EOF; got {server.returncode}"
 
     print("\nAll smoke tests passed.")
     return 0

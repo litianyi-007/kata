@@ -31,20 +31,21 @@ Skip if:
 - You're worried about read-then-write — the MCP surface is
   intentionally read-only; for write workflows use the regular skills
 
-## Phase scope (v2.8.0)
+## Phase scope (v2.9.0)
 
 Exposed tools:
 
-| Tool | Status (v2.8.0) | Notes |
+| Tool | Status (v2.9.0) | Notes |
 |---|---|---|
-| `wiki-search` | ✓ shipped | 3-pass deterministic search; tier filter; tag/type filter |
-| `wiki-query` | Phase 1 (v2.9.0) | Synthesized answer + citations |
-| `wiki-graph` | Phase 1 (v2.9.0) | Read subset only — no `--apply` exposed |
-| `wiki-spec-preflight` | Phase 1 (v2.9.0) | Advisory candidates for spec authoring |
+| `wiki-search` | ✓ shipped (v2.8.0) | 3-pass deterministic search; tier filter; tag/type filter |
+| `wiki-graph` | ✓ shipped (v2.9.0) | Read subset — neighbors / shortest-path / hubs / orphans / cluster / stats. `--apply`-style writes NOT exposed |
+| `wiki-spec-preflight` | ✓ shipped (v2.9.0) | Advisory candidates only. `--enforce` deliberately NOT exposed: write-blocking semantics don't translate cross-wiki (B can't gate A's ingest; A enforces locally combining own + federated candidates) |
+| `wiki-query` | Not exposed (and not planned) | Synthesis is caller-side over `wiki-search` + `wiki-graph` results in the federation model. A dedicated `wiki-query` MCP tool would either duplicate wiki-search or build a synthesis-server feature that doesn't fit the query-only federation contract |
 
-**Never exposed**: `wiki-ingest`, `wiki-import`, `wiki-tier --pin`,
-`wiki-dream --apply`, any other write skill. Cross-wiki write
-requires explicit `wiki-import` against the peer's filesystem path.
+**Never exposed** (hard boundary): `wiki-ingest`, `wiki-import`,
+`wiki-tier --pin`, `wiki-dream --apply`, `wiki-spec-preflight --enforce`,
+any other write/mutation surface. Cross-wiki write requires explicit
+`wiki-import` against the peer's filesystem path.
 
 ## How to start the server
 
@@ -129,12 +130,13 @@ The MCP protocol version implemented: `2024-11-05`.
 ```json
 {
   "name": "kata-wiki",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "kata": {
     "wiki_id": "7b52f6df-d7cf-47ab-b980-6042cf3a675c",
     "wiki_path": "/home/user/.llm-wiki/NECallKit",
     "domain": "NECallKit multi-platform SDK",
-    "categories": ["platforms", "modules", "features", "bugs", "decisions", "lessons", "queries"]
+    "categories": ["platforms", "modules", "features", "bugs", "decisions", "lessons", "queries"],
+    "tier_distribution": {"active": 12, "archived": 11, "frozen": 94}
   }
 }
 ```
@@ -143,6 +145,13 @@ The `kata` sub-object is a custom extension. The federation client
 reads `kata.wiki_id` to perform the identity check (PRD §Safety):
 if the registry says peer A has `wiki_id=X` but the actual
 `serverInfo.kata.wiki_id` is Y, the peer is refused this session.
+
+`tier_distribution` (added in v2.9.0) is the active/archived/frozen
+counts across the whole wiki, computed once at server boot. Used by
+federation clients for peer capacity inspection ("does this kata
+have content?", "is the active surface thin or saturated?"). Counts
+are frozen for the server's lifetime — restart needed to refresh
+after large ingests.
 
 ### Tool result shape (wiki-search)
 
@@ -215,19 +224,21 @@ py -3 plugin/scripts/mcp_server.py --wiki ~/.llm-wiki/X 2>~/.kata/mcp.log
 A future enhancement (v1.12+ polish): structured per-request stderr
 logging with timing breakdowns. Out of scope for MVP.
 
-## Known limitations (Phase 0)
+## Known limitations (Phase 0+1)
 
-- **Only one tool** (`wiki-search`) — Phase 1 adds the other three
-- **stdio only** — Phase 1 adds SSE for cross-machine federation
-- **No incremental results** — `tools/call` returns the full result
-  in one MCP response (search is fast enough this isn't a problem)
-- **No subscriptions / progress notifications** — search is
-  synchronous; if a future tool needs progress (e.g. dreaming
-  diagnostic), the protocol supports `notifications/progress` but
-  we don't use it yet
-- **Server doesn't auto-reload SCHEMA.md.** If you edit SCHEMA.md
-  while the server is running, restart it for the change to take
-  effect. Same contract as v1.8 sync.
+- **3 read tools** — `wiki-search` + `wiki-graph` + `wiki-spec-preflight`. No
+  write skills ever exposed; `wiki-query` deliberately not built (federation
+  pattern is caller-side synthesis)
+- **stdio only** — SSE for cross-machine federation deferred to Phase 2+
+  (v2.10.0+) along with the federation client
+- **No incremental results** — `tools/call` returns the full envelope in one
+  MCP response (none of the 3 tools are slow enough for this to matter)
+- **No subscriptions / progress notifications** — all 3 tools synchronous
+- **Server doesn't auto-reload SCHEMA.md** — if you edit SCHEMA.md while the
+  server is running, restart for the change (and the cached
+  `tier_distribution`) to take effect. Same contract as v1.8 sync.
+- **`tier_distribution` is boot-time snapshot** — large ingest mid-session
+  won't update the federation peer's view until the server restarts
 
 ## See also
 

@@ -1,7 +1,7 @@
 ---
 name: kata
-description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 16 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server). Spec History Management (v1.13) in Phase 0+2. v1.11 session-ingest MVP shipped. v1.12 cross-wiki federation Phase 0 shipped — kata wiki exposed as MCP server over stdio with wiki-search as first read-only tool."
-version: 2.8.0
+description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 16 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server). v1.13 SHM Phase 0+2. v1.11 session-ingest MVP. v1.12 cross-wiki federation Phase 0+1 — kata MCP server exposes 3 read-only tools (wiki-search + wiki-graph + wiki-spec-preflight) with tier_distribution capability declaration. Phase 2 (federation client + kata:// URI) is next."
+version: 2.9.0
 author: surebeli
 license: MIT
 ---

@@ -4,6 +4,91 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.9.0] — 2026-05-19 — v1.12 cross-wiki federation Phase 1 (MCP tool surface expansion)
+
+**Second batch of MCP tools land.** Kata's MCP server now exposes 3
+read-only tools instead of 1, with `tier_distribution` capability
+declaration for federation-peer inspection. Phase 2 (federation client
+side + `kata://` URI) is the next deliverable.
+
+### Added
+
+- **MCP tool: `wiki-graph`** (`plugin/scripts/mcp_server.py`) —
+  subprocess-wraps `graph_query.py`. Exposes 6 read modes:
+  - `stats` — total pages / edges / tier distribution
+  - `hubs` — top pages by in-degree
+  - `orphans` — pages with no links in/out
+  - `neighbors` — graph traversal from a seed page, configurable depth
+  - `shortest-path` — find path between two pages
+  - `cluster` — group pages by tag
+  Write-side `--apply`-style operations NOT exposed (no such flags on
+  graph_query, but the principle holds for future modes).
+- **MCP tool: `wiki-spec-preflight`** — subprocess-wraps
+  `spec_preflight.py` in advisory mode only. Returns ranked prior-spec
+  candidates for a new draft. Inputs: `new_spec_path` (required),
+  `limit`, `include_archived`, `include_frozen`. **`--enforce` /
+  `--enforce-threshold` / `--enforce-mode` deliberately NOT exposed**:
+  write-blocking semantics don't translate cross-wiki (B can't gate
+  A's ingest decisions; A enforces locally combining own + federated
+  candidates).
+- **`serverInfo.kata.tier_distribution`** — boot-time snapshot of
+  active / archived / frozen page counts. Federation client uses this
+  for peer capacity inspection ("does this kata have content?", "is
+  the active surface saturated?") before sending real queries.
+- **Smoke tests T-mcp-5..8** (Tests 31-34 in `run_smoke.py`):
+  - T-mcp-5: `wiki-graph` stats + hubs work; invalid mode returns
+    `INVALID_PARAMS` (-32602)
+  - T-mcp-6: `wiki-spec-preflight` surfaces F100 candidate;
+    `enforcement` block correctly absent from output
+  - T-mcp-7: `serverInfo.kata.tier_distribution` populated from a
+    7-page fixture
+  - T-mcp-8: `tools/list` returns all 3 Phase 1 tools
+
+### Changed
+
+- `mcp_server.py` introduces `_run_json_subprocess()` helper +
+  `TOOL_INVOKERS` dispatch table — adding a 4th tool is now schema
+  definition + invoker function + 1-line registration. No more
+  copy-paste of the run-subprocess pattern.
+- T-mcp-2 (Phase 0 smoke) loosened from "tools count == 1" to
+  "wiki-search is in the tool list"; the strict count assertion moved
+  to T-mcp-8 (Phase 1).
+- `wiki-mcp-server` SKILL.md phase scope table refreshed; serverInfo
+  example includes `tier_distribution`; known-limitations adjusted.
+
+### Why `wiki-query` is NOT in this release (and not planned)
+
+In the federation model, synthesis is **caller-side**. Kata A asks
+peer kata B for raw query material (`wiki-search` results,
+`wiki-graph` structure, `wiki-spec-preflight` candidates), then A's
+agent synthesizes across A's local results + B's responses, with
+citations to both via the `kata://` URI scheme (Phase 2). Server-side
+synthesis would either:
+
+- (a) Duplicate `wiki-search` (since there's no underlying
+  `wiki_query.py` script — wiki-query is currently agent-driven via
+  SKILL.md instructions in Claude Code, with no equivalent for a
+  cross-process MCP boundary)
+- (b) Build a synthesis-server feature that conflicts with the
+  "query-only" federation contract — the server is supposed to return
+  material, not opinions
+
+Decision recorded in PRD §"Phase 1 — Tool surface expansion" and
+re-affirmed by this CHANGELOG entry.
+
+### Validation
+
+All 34 smoke tests pass (30 prior + 4 new MCP tests). Pre-commit hook
+clean.
+
+### Migration
+
+Drop-in. Existing MCP clients pointed at a kata server keep working —
+the new tools just show up in `tools/list`. Federation clients (Phase
+2+) gain the `tier_distribution` field at no cost.
+
+---
+
 ## [2.8.1] — 2026-05-18 — Phase 0 dogfood fixes (discover_pages robustness + MCP UTF-8)
 
 Three bugs surfaced by the first live Phase 0 dogfood (Claude Code MCP
