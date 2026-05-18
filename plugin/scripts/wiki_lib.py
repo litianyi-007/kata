@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -301,7 +302,15 @@ def extract_links(body: str) -> list[str]:
 
 
 def discover_pages(wiki_root: Path) -> list[Page]:
-    """Walk wiki_root, skip raw/, _archive/, hidden dirs. Return Pages."""
+    """Walk wiki_root, skip raw/, _archive/, hidden dirs. Return Pages.
+
+    Per-page parse errors (malformed YAML frontmatter, unsupported scalar
+    styles, etc.) are caught and logged to stderr but **do not abort the
+    walk**. A single bad page must not poison a wiki-search / wiki-query /
+    spec_preflight / MCP-server scan of the rest of the wiki. The skipped
+    page is reported once in the form `[discover_pages] skipped <path>:
+    <error>` so the user/agent can fix or quarantine it.
+    """
     pages: list[Page] = []
     skip_dirs = {"raw", "_archive", "node_modules"}
     for root, dirs, files in os.walk(wiki_root):
@@ -315,7 +324,15 @@ def discover_pages(wiki_root: Path) -> list[Page]:
                 text = full.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            fm, body = parse_frontmatter(text)
+            try:
+                fm, body = parse_frontmatter(text)
+            except Exception as exc:  # noqa: BLE001 — tolerate any frontmatter
+                # malformation; one bad page must not kill the whole scan.
+                sys.stderr.write(
+                    f"[discover_pages] skipped {rel}: "
+                    f"{type(exc).__name__}: {exc}\n"
+                )
+                continue
             title = fm.get("title") or full.stem
             pages.append(Page(
                 path=rel,

@@ -2815,6 +2815,48 @@ exit 0
         f"server should exit 0 after EOF; got {server.returncode}"
     print("  ok  server exits 0 on stdin EOF (clean shutdown)")
 
+    print("\nTest 30: v2.8.1 — discover_pages tolerates bad frontmatter "
+          "(one rotten page must not poison the whole search)")
+    # Regression test for the dogfood bug surfaced 2026-05-18: a page with
+    # `key: |` block scalar in frontmatter (legitimate YAML; not supported by
+    # the stdlib YAML subset) used to crash discover_pages → killed
+    # wiki-search / wiki-query / spec_preflight / MCP server end-to-end.
+    # discover_pages now catches per-page parse errors, logs to stderr, and
+    # continues with remaining pages.
+    bad_wiki = FIXTURE.parent / "_robustness_bad_frontmatter"
+    if bad_wiki.exists():
+        _windows_safe_rmtree(bad_wiki)
+    (bad_wiki / "entities").mkdir(parents=True)
+    (bad_wiki / "SCHEMA.md").write_text(
+        "## Domain\nfixture\n\n## Categories\n\n```yaml\ncategories:\n"
+        "  - name: entities\n    purpose: entities\n```\n",
+        encoding="utf-8")
+    (bad_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (bad_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+    # Good page — must show up in results
+    (bad_wiki / "entities" / "good-page.md").write_text(
+        "---\ntitle: Good Page\ntype: entities\ntags: [attention]\n---\n\n"
+        "# Good Page\n\nContent about attention.\n",
+        encoding="utf-8")
+    # Bad page — uses `|` block scalar in frontmatter (real-world ADR
+    # pattern). Pre-fix: kills whole scan. Post-fix: logged + skipped.
+    (bad_wiki / "entities" / "bad-page.md").write_text(
+        "---\ntitle: Bad Page\nessay_angle: |\n  multi-line\n  body here\n---\n\n"
+        "# Bad Page\n",
+        encoding="utf-8")
+
+    pf = run([str(SCRIPTS / "search_naive.py"),
+              "--wiki", str(bad_wiki),
+              "--query", "attention",
+              "--limit", "10"])
+    paths = [r["path"] for r in pf.get("results", [])]
+    assert "entities/good-page.md" in paths, \
+        f"good-page must survive even when bad-page is present; got {paths}"
+    assert "entities/bad-page.md" not in paths, \
+        f"bad-page was skipped, must not appear in results; got {paths}"
+    print("  ok  discover_pages skipped bad-frontmatter page + good-page "
+          "still surfaced (no whole-scan abort)")
+
     print("\nAll smoke tests passed.")
     return 0
 

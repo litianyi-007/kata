@@ -4,6 +4,63 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.8.1] — 2026-05-18 — Phase 0 dogfood fixes (discover_pages robustness + MCP UTF-8)
+
+Three bugs surfaced by the first live Phase 0 dogfood (Claude Code MCP
+client → kata MCP server → real NECallKit + kata-self wikis):
+
+### Fixed
+
+- **A — `discover_pages` aborted on first bad-frontmatter page**
+  (`plugin/scripts/wiki_lib.py`). A single page with an unsupported
+  YAML scalar style (`key: |` block scalar) crashed the entire scan,
+  taking down wiki-search / wiki-query / spec_preflight / MCP server
+  end-to-end. Now per-page parse errors are caught, logged to stderr
+  as `[discover_pages] skipped <path>: <error>`, and the walk
+  continues. One rotten page no longer poisons the whole wiki.
+  Regression test: smoke Test 30 builds a fixture with one good +
+  one bad page and asserts the good page still surfaces.
+
+- **B — MCP server stdio inherited cp1252 on Windows**
+  (`plugin/scripts/mcp_server.py`). When Claude Code spawned the
+  server, the inherited locale was cp1252, mangling Chinese / non-ASCII
+  content in JSON-RPC responses (wiki titles, excerpts, tag values
+  showed as `��`). Server now forces UTF-8 on stdout/stdin via
+  `sys.stdout.reconfigure(encoding="utf-8")` AND sets `PYTHONUTF8=1`
+  + `PYTHONIOENCODING=utf-8` in its own environment so child
+  `search_naive.py` reads `.md` files as UTF-8 too. Belt-and-braces:
+  fixes both the JSON-RPC wire (server → client) and the file-read
+  layer (child subprocess → markdown content).
+
+- **C — kata self-meta ADR used `|` block scalar in frontmatter**
+  (`~/.llm-wiki/kata/decisions/2026-05-17-external-sources-removed.md`).
+  The `essay_angle:` field used the YAML `|` literal block-scalar
+  style, which `wiki_lib._parse_yaml_block` doesn't support. Quoted
+  the value as a single-line string as the immediate fix. Proper
+  parser support for `|` block scalars is a separate v1.12+ wiki_lib
+  enhancement (out of scope for v2.8.1). The robustness fix in (A)
+  means even if a future ADR hits the same issue, the scan won't die
+  — the page just gets skipped + logged.
+
+### Why this happened on day-1 dogfood
+
+The MCP smoke tests (T-mcp-1..4 in v2.8.0) used a synthetic fixture
+wiki with ASCII-only content + well-formed YAML frontmatter. Both
+real wikis (NECallKit with 110 Chinese pages, kata self-meta with
+yesterday's ADR) tripped real-world content patterns that the
+fixture didn't cover. Classic "smoke green, real users red" gap.
+The fix pattern is now baked into Test 30 — future regressions on
+malformed frontmatter caught at CI.
+
+### Validation
+
+All 30 smoke tests pass (29 prior + new Test 30). Live re-test
+against kata-self now returns 5 ranked results with correct UTF-8
+content; live re-test against NECallKit no longer garbles Chinese
+titles.
+
+---
+
 ## [2.8.0] — 2026-05-18 — v1.12 cross-wiki federation Phase 0 (MCP server scaffold)
 
 **First half of cross-wiki federation lands.** Kata wiki can now

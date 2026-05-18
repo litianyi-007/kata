@@ -39,7 +39,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-from wiki_lib import find_wiki_root, load_schema
+# Force UTF-8 on stdio before importing anything that touches stdout/stdin.
+# When Claude Code spawns this server on Windows, the inherited locale is
+# typically cp1252, which mangles non-ASCII content (wiki titles, excerpts,
+# Chinese tags) on the JSON-RPC wire. Both legs need explicit reconfigure:
+# stdout (JSON-RPC out to Claude Code) AND child env (search_naive reads
+# .md files; PYTHONUTF8=1 flips Python's UTF-8 mode for child file IO too).
+try:
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")
+    sys.stdin.reconfigure(encoding="utf-8")
+except (AttributeError, OSError):
+    pass
+os.environ.setdefault("PYTHONUTF8", "1")
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+from wiki_lib import find_wiki_root, load_schema  # noqa: E402
 
 
 # MCP protocol version we implement. Pin to the latest stable spec
