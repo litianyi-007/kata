@@ -251,6 +251,48 @@ wiki-ingest raw/sessions/claude-code-2026-05-17-foo-12434e19.md \
 Per step ⑦ Report, surface any hint that was overridden so the upstream
 caller can audit what landed vs what was requested.
 
+### ④c Auto-propagate spec_relationships (v1.13 Phase 3, v2.12.0+)
+
+If the new page's frontmatter contains `spec_relationships:` AND
+SCHEMA.md sets `spec_authoring.auto_propagation.enabled: true`, invoke
+spec auto-propagation BEFORE cross-referencing (step ⑤) so the
+modified target pages also get their cross-refs updated in the same
+ingest:
+
+```bash
+python {plugin_root}/scripts/spec_propagate.py \
+    --wiki {wiki_path} \
+    --new-spec {wiki-relative-path-of-page-just-written}
+```
+
+For each `kind:` in `spec_authoring.auto_propagation.kinds_to_propagate`
+(default: `[supersedes]`), the script applies three idempotent actions
+to the target page:
+
+1. **Banner**: prepends a `<!-- kata:spec-banner BEGIN/END -->` marker
+   block warning the reader the page is superseded
+2. **Reverse link**: appends `spec_superseded_by: [{path, date, note}]`
+   to target's frontmatter (dedup by path on re-run)
+3. **Tier flip**: sets `tier_override: archived` + `tier_reason:
+   "Superseded by <stem> on <date>"` (unless author manually pinned
+   the page — detected via tier_reason NOT starting with "Superseded by")
+
+**Federation carve-out**: `kata://<peer>/<path>` targets DO NOT modify
+the peer page (read-only federation contract from v1.12 D1.6). They
+write to `{wiki_path}/.spec-reverse-index.yaml` which Phase 4 lineage
+view (`wiki-graph --mode spec-history`) reads.
+
+Surface the propagation result in step ⑦ Report: list each target
+that got the banner / reverse-link / tier flip + any `kata://`
+entries added to the reverse-index. The author needs to know that
+their supersede declaration triggered other-page modifications.
+
+**When to skip**:
+
+- `spec_authoring.auto_propagation.enabled: false` (default — opt-in)
+- The new page has no `spec_relationships:` block
+- No relationship's `kind:` is in `kinds_to_propagate`
+
 ### ⑤ Cross-reference both ways
 
 For every page created or updated, check that **at least one existing page links
