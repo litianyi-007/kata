@@ -52,12 +52,54 @@ reaching outside the wiki root for "transit" data violates kata's
 self-closing principle and required inventing a lifecycle (graduation /
 blocklist / TTL) that didn't belong inside a preflight skill.
 
-## Phase 3+ (future)
+## Phase 3 (v2.12.0+) — auto-propagation
+
+When `spec_authoring.auto_propagation.enabled: true` and a newly-
+ingested spec contains `kind: supersedes` (or other kinds in
+`kinds_to_propagate`), kata automatically applies three changes to
+each target page:
+
+1. **Banner** — prepends a marker-delimited block at the top of the
+   target body warning the reader the page is superseded
+2. **Reverse link** — appends `spec_superseded_by: [{path, date, note}]`
+   to the target's frontmatter
+3. **Tier flip** — sets `tier_override: archived` + `tier_reason:
+   "Superseded by <stem> on <date>"` (skipped if the author already
+   pinned the target to a different tier — detected by tier_reason
+   NOT starting with "Superseded by")
+
+All three are **idempotent**: re-ingesting the same new spec doesn't
+duplicate (banner uses `<!-- kata:spec-banner BEGIN/END -->` sentinel
+markers; frontmatter uses dedup-by-path for the spec_superseded_by
+list).
+
+**Federation carve-out**: when `target:` is a `kata://<peer>/<path>`
+URI (v1.12 cross-wiki federation), kata records the supersession in
+a local `{wiki_path}/.spec-reverse-index.yaml` instead of modifying
+the peer page (read-only federation contract). Phase 4 lineage view
+reads this index alongside in-wiki reverse-links.
+
+**Dreamer integration** (v1.6 dogfood Week 1 channel-mismatch fix):
+pages with `spec_superseded_by:` populated, or with `tier_override:
+archived` + `tier_reason:` starting with "Superseded by", are
+automatically excluded from `wiki-dream` co-occurrence candidates.
+The supersede declaration is an explicit reject signal — never
+resurface dead specs via inference.
+
+Invoked by `wiki-ingest` step ②c (after page write, before commit)
+when `auto_propagation.enabled` is true. Standalone CLI:
+
+```bash
+python {plugin_root}/scripts/spec_propagate.py \
+    --wiki {wiki_path} \
+    --new-spec {wiki-relative-or-absolute-path}
+```
+
+## Phase 4 (future)
 
 | Phase | Adds |
 |---|---|
-| 3 | Auto-propagation: superseded specs get banner + tier flip + reverse-link (kata-internal only) |
-| 4 | `wiki-graph --spec-history <topic>` coherence view |
+| 4 | `wiki-graph --spec-history <topic>` coherence view (lineage tree) |
 
 See `docs/PRD-v1.13-spec-history-management.md` for full design.
 

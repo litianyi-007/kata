@@ -3508,6 +3508,211 @@ print(json.dumps({{
           "stderr warning ([federation_client] ... is malformed YAML ...) "
           "(M1 fix verified)")
 
+    print("\nTest 42-46: v1.13 Phase 3 — spec auto-propagation (T-prop-1..5)")
+    # Build a wiki with: 1 prior spec F015 (about to get superseded),
+    # 1 new spec F017 that declares supersedes F015 + extends F011 +
+    # supersedes kata://peer/decisions/F100.md (federation case).
+    prop_wiki = FIXTURE.parent / "_prop_wiki"
+    if prop_wiki.exists():
+        _windows_safe_rmtree(prop_wiki)
+    (prop_wiki / "decisions").mkdir(parents=True)
+    (prop_wiki / "SCHEMA.md").write_text(
+        "## Identity\n\n```yaml\nwiki_id: ffff1111-2222-4333-8444-555555555555\n```\n\n"
+        "## Domain\nprop fixture\n\n"
+        "## Categories\n\n```yaml\ncategories:\n  - name: decisions\n    purpose: decisions\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 365\n  archived_days: 730\n  driving_field: published_at\n```\n\n"
+        "## Spec authoring\n\n```yaml\nspec_authoring:\n  enabled: true\n"
+        "  spec_types: [decisions]\n"
+        "  auto_propagation:\n    enabled: true\n"
+        "    kinds_to_propagate: [supersedes]\n"
+        "    auto_tier_flip: true\n```\n",
+        encoding="utf-8")
+    (prop_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (prop_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+    # F015: the soon-to-be-superseded spec
+    f015 = prop_wiki / "decisions" / "F015-old-auth.md"
+    f015.write_text(
+        "---\ntitle: F015 Old Auth Design\ntype: decisions\n"
+        "tags: [auth, legacy]\npublished_at: 2026-03-02\n---\n\n"
+        "# F015 Old Auth\n\nOriginal design.\n",
+        encoding="utf-8")
+    # F011: a "refines" target (Phase 3 shouldn't touch — kind not in propagate list)
+    f011 = prop_wiki / "decisions" / "F011-merge-back.md"
+    f011.write_text(
+        "---\ntitle: F011 Merge-back\ntype: decisions\n"
+        "tags: [auth]\npublished_at: 2026-04-15\n---\n\n"
+        "# F011 Merge-back\n\nNot to be modified by propagation (kind=refines, "
+        "not in kinds_to_propagate).\n",
+        encoding="utf-8")
+    # F017: the new spec doing the superseding
+    f017 = prop_wiki / "decisions" / "F017-new-auth.md"
+    f017.write_text(
+        "---\ntitle: F017 New Auth Design\ntype: decisions\n"
+        "tags: [auth, modern]\npublished_at: 2026-05-19\n"
+        "spec_relationships:\n"
+        "  - kind: supersedes\n    target: decisions/F015-old-auth.md\n"
+        "    note: F015 fully replaced; new token model\n"
+        "  - kind: refines\n    target: decisions/F011-merge-back.md\n"
+        "    note: lane discipline still applies\n"
+        "  - kind: supersedes\n    target: \"kata://peer-z/decisions/F100-payment.md\"\n"
+        "    note: cross-wiki F100 absorbed\n"
+        "---\n\n"
+        "# F017 New Auth\n\nReplaces F015.\n",
+        encoding="utf-8")
+
+    # T-prop-1: banner + reverse-link + tier flip on F015
+    prop1 = run([str(SCRIPTS / "spec_propagate.py"),
+                 "--wiki", str(prop_wiki),
+                 "--new-spec", str(f017)])
+    assert_eq("T-prop-1: phase marker", prop1["phase"], 3)
+    assert_eq("T-prop-1: auto_propagation enabled", prop1["enabled"], True)
+
+    propagations = prop1["propagations"]
+    f015_prop = next((p for p in propagations
+                      if p.get("channel") == "in-place"
+                      and "F015" in (p.get("target_rel") or "")), None)
+    assert f015_prop is not None, \
+        f"F015 in-place propagation must occur; got {propagations}"
+    assert_eq("T-prop-1: F015 banner inserted",
+              f015_prop["banner_inserted_or_updated"], True)
+    assert_eq("T-prop-1: F015 tier flipped", f015_prop["tier_flipped"], True)
+    assert_eq("T-prop-1: F015 reverse_link_count", f015_prop["reverse_link_count"], 1)
+
+    f015_text = f015.read_text(encoding="utf-8")
+    assert "<!-- kata:spec-banner BEGIN -->" in f015_text, \
+        f"F015 must have banner marker; got: {f015_text[:300]}"
+    assert "Superseded by [[F017-new-auth]]" in f015_text, \
+        "F015 banner must reference F017 stem"
+    assert "spec_superseded_by:" in f015_text, \
+        "F015 frontmatter must have spec_superseded_by"
+    assert "tier_override: archived" in f015_text, \
+        "F015 must be auto-archived"
+    assert 'tier_reason: "Superseded by F017-new-auth' in f015_text, \
+        f"F015 tier_reason must explain why; got snippet: " \
+        f"{[l for l in f015_text.split(chr(10)) if 'tier_reason' in l]}"
+    print("  ok  T-prop-1: F015 got banner + spec_superseded_by + "
+          "tier_override=archived from F017's supersedes declaration")
+
+    # T-prop-2: F011 (kind=refines) was NOT propagated
+    f011_text = f011.read_text(encoding="utf-8")
+    assert "<!-- kata:spec-banner" not in f011_text, \
+        "F011 must NOT have banner — kind=refines is not in kinds_to_propagate"
+    assert "spec_superseded_by:" not in f011_text, \
+        "F011 must NOT have reverse-link — kind=refines is not in kinds_to_propagate"
+    f011_skipped = next((s for s in prop1["skipped"]
+                         if "F011" in str(s.get("target", ""))), None)
+    assert f011_skipped is not None, \
+        f"F011 must appear in `skipped` with kind=refines reason; got skipped: {prop1['skipped']}"
+    assert "refines" in f011_skipped["reason"]
+    print("  ok  T-prop-2: F011 (kind=refines) NOT propagated; kinds_to_propagate filter works")
+
+    # T-prop-3: kata://peer-z URI → reverse-index file, NOT modifying any peer
+    kata_prop = next((p for p in propagations
+                      if p.get("channel") == "reverse-index"), None)
+    assert kata_prop is not None, \
+        f"kata:// supersede must use reverse-index channel; got {propagations}"
+    assert_eq("T-prop-3: kata:// channel = reverse-index",
+              kata_prop["channel"], "reverse-index")
+    idx_path = prop_wiki / ".spec-reverse-index.yaml"
+    assert idx_path.is_file(), \
+        f".spec-reverse-index.yaml must exist after kata:// propagation"
+    idx_text = idx_path.read_text(encoding="utf-8")
+    assert "external_supersessions:" in idx_text
+    assert "kata://peer-z/decisions/F100-payment.md" in idx_text
+    assert "superseded_by: decisions/F017-new-auth.md" in idx_text
+    print("  ok  T-prop-3: kata://peer-z/... supersede → .spec-reverse-index.yaml "
+          "(peer wiki NOT modified — read-only federation contract preserved)")
+
+    # T-prop-4: idempotency — re-running on the SAME new spec doesn't duplicate
+    f015_before = f015.read_text(encoding="utf-8")
+    idx_before = idx_path.read_text(encoding="utf-8")
+    prop2 = run([str(SCRIPTS / "spec_propagate.py"),
+                 "--wiki", str(prop_wiki),
+                 "--new-spec", str(f017)])
+    f015_after = f015.read_text(encoding="utf-8")
+    idx_after = idx_path.read_text(encoding="utf-8")
+    # Banner marker should appear exactly once
+    assert f015_after.count("<!-- kata:spec-banner BEGIN -->") == 1, \
+        f"banner must appear exactly once after re-apply; got " \
+        f"{f015_after.count('<!-- kata:spec-banner BEGIN -->')} occurrences"
+    # spec_superseded_by list should still have exactly 1 entry
+    assert f015_after.count("- path: decisions/F017-new-auth.md") == 1, \
+        f"spec_superseded_by must have exactly 1 entry for F017; got " \
+        f"{f015_after.count('- path: decisions/F017-new-auth.md')}"
+    # tier_override line should appear exactly once
+    assert f015_after.count("tier_override: archived") == 1, \
+        f"tier_override must appear exactly once; got " \
+        f"{f015_after.count('tier_override: archived')}"
+    # Reverse index also dedups
+    assert idx_after.count("kata://peer-z/decisions/F100-payment.md") == 1, \
+        "reverse-index must dedup kata://peer-z entry on re-apply"
+    print("  ok  T-prop-4: re-running propagation is idempotent (banner / "
+          "spec_superseded_by / tier_override / reverse-index entries all "
+          "appear exactly once)")
+
+    # T-prop-5: dreamer skips superseded pages
+    # Build a tiny fixture wiki where F015 (now superseded) sits in
+    # archived tier, plus an active page with rich co-occurrence
+    # signals that would normally pull F015 back up. F015 must NOT
+    # appear as a dream candidate because its spec_superseded_by is
+    # populated.
+    drm_wiki = FIXTURE.parent / "_prop_dreamer"
+    if drm_wiki.exists():
+        _windows_safe_rmtree(drm_wiki)
+    (drm_wiki / "decisions").mkdir(parents=True)
+    (drm_wiki / "SCHEMA.md").write_text(
+        "## Identity\n\n```yaml\nwiki_id: aaaa9999-7777-4666-8555-444444444444\n```\n\n"
+        "## Domain\ndream fixture\n\n"
+        "## Categories\n\n```yaml\ncategories:\n  - name: decisions\n    purpose: decisions\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 30\n  archived_days: 60\n"
+        "  driving_field: published_at\n```\n\n"
+        "## Dreaming\n\n```yaml\ndreaming:\n  enabled: true\n  cadence: weekly\n"
+        "  confidence_threshold: 0.0\n```\n",
+        encoding="utf-8")
+    (drm_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (drm_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+    # F015: old, superseded, but tagged with strong overlap to active page
+    (drm_wiki / "decisions" / "F015-superseded.md").write_text(
+        "---\ntitle: F015 Superseded\ntype: decisions\n"
+        "tags: [auth, token, security]\n"
+        "published_at: 2025-01-01\n"
+        "spec_superseded_by:\n"
+        "  - path: decisions/F017-new-auth.md\n"
+        "    date: 2026-05-19\n"
+        "    note: replaced\n"
+        "tier_override: archived\n"
+        "tier_reason: \"Superseded by F017-new-auth on 2026-05-19\"\n---\n\n"
+        "# F015 superseded.\n",
+        encoding="utf-8")
+    # Recent active page that mentions same tags (would normally trigger
+    # dream resurgence on F015 via tag co-occurrence)
+    (drm_wiki / "decisions" / "F020-recent-active.md").write_text(
+        "---\ntitle: F020 Recent\ntype: decisions\n"
+        "tags: [auth, token, security]\n"
+        "ingested_at: 2026-05-15\npublished_at: 2026-05-15\n---\n\n"
+        "# F020 recent — heavy tag co-occurrence with F015.\n"
+        "References [[F015-superseded]] indirectly.\n",
+        encoding="utf-8")
+    # Append a recent log entry so dream sees activity in the window
+    log_path = drm_wiki / "log.md"
+    log_path.write_text(
+        log_path.read_text(encoding="utf-8")
+        + "\n## [2026-05-15] ingest | F020 recent\n"
+        + "- Created: decisions/F020-recent-active.md\n",
+        encoding="utf-8")
+
+    drm_out = run([str(SCRIPTS / "wiki_dream.py"),
+                   "--wiki", str(drm_wiki),
+                   "--since", "2026-04-15"])
+    cand_paths = [c.get("page") for c in drm_out.get("candidates", [])]
+    assert "decisions/F015-superseded.md" not in cand_paths, \
+        f"F015 must be excluded from dream candidates (it's superseded); " \
+        f"got candidates: {cand_paths}"
+    print("  ok  T-prop-5: dreamer skips spec_superseded_by-marked pages "
+          "(v1.6 dogfood channel-mismatch finding closed)")
+
     print("\nAll smoke tests passed.")
     return 0
 

@@ -4,6 +4,116 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.12.0] — 2026-05-19 — v1.13 SHM Phase 3 (auto-propagation)
+
+Closes the supersede-loop. When a newly-ingested spec declares
+`kind: supersedes target: ...`, kata auto-applies banner + reverse-link
++ tier flip to the target page (no more manual housekeeping). Closes
+v1.6 dogfood Week 1's channel-mismatch finding by giving the dreamer
+an explicit "this spec is dead" signal.
+
+### Added
+
+- **`plugin/scripts/spec_propagate.py`** (~400 lines, stdlib only) —
+  three propagation actions per `kind: supersedes` target:
+  - **Banner**: marker-delimited block (`<!-- kata:spec-banner BEGIN/END -->`)
+    prepended after the target's frontmatter. Idempotent via marker
+    detection + in-place replace.
+  - **Reverse link**: appends `spec_superseded_by: [{path, date, note}]`
+    to target's frontmatter. Dedups by `path:` field across re-runs.
+  - **Tier flip**: sets `tier_override: archived` + `tier_reason:
+    "Superseded by <stem> on <date>"`. **Skipped** if author already
+    pinned the page (detected by tier_reason NOT starting with
+    "Superseded by") — author's manual tier wins.
+
+- **Federation carve-out**: `kata://<peer>/<path>` targets do NOT
+  modify the peer wiki (read-only contract from v1.12). Instead,
+  records the supersession in a kata-local
+  `{wiki_path}/.spec-reverse-index.yaml`:
+
+  ```yaml
+  external_supersessions:
+    - external_target: kata://peer-b/decisions/F011.md
+      superseded_by: decisions/F017-new.md
+      date: 2026-05-19
+      note: "F011 absorbed into F017"
+  ```
+
+  Dedups by (external_target, superseded_by) pair on re-run.
+
+- **`wiki_dream.py` reject-signal hook**: candidate pool excludes
+  pages where:
+  - `spec_superseded_by:` frontmatter is a non-empty list, OR
+  - `tier_override: archived` AND `tier_reason:` starts with
+    `"Superseded by"`
+
+  These pages are dead by explicit declaration, not by inference —
+  never resurface them via co-occurrence dreaming regardless of
+  score. Closes the **v1.6 Week 1 channel-mismatch finding**
+  (project memory `project_dogfood_v1.6` flagged that `--apply` was
+  underused; the new reject channel is more targeted than tier
+  alone).
+
+- **Schema `spec_authoring.auto_propagation`** block in
+  `schema/wiki-schema.json`:
+  - `enabled: false` (default, opt-in)
+  - `kinds_to_propagate: ["supersedes"]` (default; future could add
+    `refines`)
+  - `auto_tier_flip: true` (default)
+  - `banner_template:` (optional override; default 3-line blockquote)
+
+- **`wiki-spec` SKILL.md** Phase 3 docs section added (replaces the
+  "Phase 3 future" stub).
+
+### Smoke tests T-prop-1..5 (Tests 42-46)
+
+- **T-prop-1**: 2-spec fixture (F015 + F017). F017's supersedes F015
+  → F015 gets banner + spec_superseded_by entry + tier_override=archived
+  with correct tier_reason. Each field asserted individually.
+- **T-prop-2**: F017 also has `kind: refines target: F011`. F011
+  must NOT be modified (refines not in `kinds_to_propagate`); appears
+  in `skipped` list with the explanatory reason.
+- **T-prop-3**: F017's `kind: supersedes target: kata://peer-z/...`
+  writes to `.spec-reverse-index.yaml`. No file-modification on any
+  peer (peer doesn't even exist in fixture). channel=`reverse-index`.
+- **T-prop-4**: Re-running propagation on the same F017 produces
+  exactly 1 banner marker, 1 `spec_superseded_by` entry, 1
+  `tier_override` line, 1 reverse-index entry. Idempotency proven.
+- **T-prop-5**: Dreamer fixture with F015 (superseded) + F020 (recent
+  active, heavy tag overlap with F015). Without the v2.12.0 hook,
+  F015 would resurface as a candidate. After hook: F015 is excluded
+  from dream candidates. v1.6 channel-mismatch fix verified
+  end-to-end.
+
+### Migration
+
+Drop-in. Wikis without `spec_authoring.auto_propagation.enabled: true`
+behave exactly as v2.11.1. To enable:
+
+```yaml
+# SCHEMA.md
+spec_authoring:
+  enabled: true
+  enforce_relationship_declaration: true   # Phase 2 (optional)
+  auto_propagation:
+    enabled: true                          # Phase 3 master toggle
+    kinds_to_propagate: [supersedes]
+    auto_tier_flip: true
+```
+
+Existing supersede declarations from before v2.12.0 won't
+retroactively propagate — only newly-ingested specs trigger. To
+backfill, the user can manually run
+`spec_propagate.py --new-spec <path>` on each prior spec containing
+a supersede declaration (idempotent, safe to run multiple times).
+
+### Validation
+
+All 46 smoke tests pass (41 prior + 5 new T-prop-1..5). Pre-commit
+hook clean.
+
+---
+
 ## [2.11.1] — 2026-05-19 — Codex-review patch — federation client cleanup + doc fixes
 
 Patch from a structural review by Codex GPT-5.5 xhigh (partial run;

@@ -274,6 +274,36 @@
           "enum": ["strict", "confirm"],
           "default": "strict",
           "description": "Phase 2 enforcement style. strict: ingest rejected with exit code 2 if any above-threshold candidate is uncovered. confirm: ingest paused, agent prompted to either declare or mark explicitly_unrelated per uncovered candidate (Phase 2 confirm-mode UX TBD; strict is the safer default)."
+        },
+        "auto_propagation": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Phase 3 (v2.12.0+): auto-propagate spec_relationships to target pages. When a newly-ingested spec contains `kind: supersedes` (or other kinds in kinds_to_propagate), the target page gets a marker-delimited banner, a `spec_superseded_by:` reverse-link in frontmatter, and (optionally) `tier_override: archived`. kata:// URIs (v1.12 federation targets) record to a local `.spec-reverse-index.yaml` instead of modifying the peer page (read-only federation contract).",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Phase 3 master toggle. Off by default — opt-in per wiki. When false, ingest leaves spec_relationships as declarative-only (Phase 2 enforcement still works)."
+            },
+            "kinds_to_propagate": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["supersedes", "refines", "extends", "parallel", "contradicts"]
+              },
+              "default": ["supersedes"],
+              "description": "Which relationship kinds trigger propagation. `supersedes` is the safe default; `refines` could also propagate (banner only, no tier flip) in a future enhancement."
+            },
+            "auto_tier_flip": {
+              "type": "boolean",
+              "default": true,
+              "description": "When true (default), supersession sets `tier_override: archived` on the target. The author can override by manually setting tier_override beforehand — propagation detects existing author-set pins (tier_reason not starting with 'Superseded by') and skips the flip."
+            },
+            "banner_template": {
+              "type": "string",
+              "description": "Template for the banner block. Placeholders: {new_stem}, {date}, {note}. The block is wrapped in `<!-- kata:spec-banner BEGIN/END -->` markers for idempotent re-application. Default is a 3-line blockquote."
+            }
+          }
         }
       }
     }

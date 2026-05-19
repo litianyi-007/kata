@@ -117,6 +117,26 @@ def main() -> int:
     candidate_pool = [p for p in pages
                       if tier_map[p.path] in ("archived", "frozen")]
 
+    # v2.12.0 — v1.13 Phase 3 dreamer reject-signal hook. Pages that
+    # were superseded by an explicit `kind: supersedes` declaration
+    # (frontmatter `spec_superseded_by:` non-empty) are dead by
+    # declaration, not by inference — never resurface them via
+    # co-occurrence dreaming regardless of score. Same for pages auto-
+    # tier-flipped by Phase 3 (tier_reason starts with "Superseded by").
+    # Closes the v1.6 dogfood Week 1 channel-mismatch finding with an
+    # even more targeted reject channel than tier_override alone.
+    def _is_superseded(page) -> bool:
+        sb = page.frontmatter.get("spec_superseded_by")
+        if isinstance(sb, list) and sb:
+            return True
+        if page.frontmatter.get("tier_override") == "archived":
+            reason = str(page.frontmatter.get("tier_reason") or "")
+            if reason.startswith("Superseded by"):
+                return True
+        return False
+
+    candidate_pool = [p for p in candidate_pool if not _is_superseded(p)]
+
     # Score every candidate
     scored: list[Candidate] = []
     for p in candidate_pool:
