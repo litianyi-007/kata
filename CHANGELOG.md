@@ -4,6 +4,113 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.11.1] — 2026-05-19 — Codex-review patch — federation client cleanup + doc fixes
+
+Patch from a structural review by Codex GPT-5.5 xhigh (partial run;
+shared runtime crashed at synthesis but caught 6 reading-phase
+findings — see review log for details). Addresses HIGH + MEDIUM
+items; LOW/NIT items deferred.
+
+### Fixed
+
+- **H1 — MCPClient subprocess leak on `connect()` failure**
+  (`plugin/scripts/federation_client.py`)
+
+  Pre-v2.11.1: when `connect()` raised post-`Popen()` —
+  `TimeoutError`, `RuntimeError` on init failure, `WikiIdMismatchError`
+  on identity check — the subprocess outlived the `with MCPClient(...)`
+  context manager because `__enter__` never returned, so `__exit__`
+  never ran. Every misconfigured peer leaked one orphan `python.exe`.
+  Compounded across a flaky-peer dogfood session.
+
+  Fixed by wrapping the post-spawn init block in a try/except that
+  calls `self.close()` (which terminates the subprocess gracefully then
+  force-kills if needed) and re-raises the original exception.
+
+  Uses `except BaseException` so cleanup also runs on `KeyboardInterrupt`
+  / `SystemExit`. Smoke Test 40 (T-fed-6) regression-guards by
+  instantiating `MCPClient` with a deliberately wrong `wiki_id`,
+  catching the `WikiIdMismatchError`, then asserting `self.proc is None`.
+
+- **M1 — Silent failure on malformed `.federation.yaml`**
+  (`plugin/scripts/federation_client.py`)
+
+  Pre-v2.11.1: parse errors caught with bare `except Exception:` and
+  returned empty list. Indistinguishable from "no peers configured" —
+  the user's trust list silently disappeared with no diagnostic.
+
+  Fixed: parse failures (and read failures, and "peers is not a list"
+  schema errors) now emit a `[federation_client] ...` warning to stderr
+  explaining the cause. Also includes the most common Windows pitfall
+  in the malformed-YAML warning text: `command:` array with unquoted
+  drive-colon paths.
+
+  Smoke Test 41 (T-fed-7) regression-guards by using a YAML anchor
+  (`&anchor`) — which the kata-stdlib YAML subset explicitly rejects —
+  and capturing stderr to verify the warning fires.
+
+- **M3 — Skill SKILL.md overpromised "in parallel"**
+  (`plugin/skills/wiki-federate/SKILL.md`)
+
+  Pre-v2.11.1: doc claimed `federate-search` "Runs local search **in
+  parallel** with fan-out to each enabled peer." Actual sequence in
+  `federate_search()`: local first (blocking sync), THEN
+  ThreadPoolExecutor for fan-out. Local search blocks the whole call
+  before any peer query begins.
+
+  Fixed wording: "Runs local search, **then** fans out **in parallel**
+  to each enabled peer. (Local search blocks before fan-out begins —
+  peer queries don't start until local completes. Slow local search =
+  delayed peer queries.)"
+
+- **M4 — `command:` field type not validated**
+  (`plugin/scripts/federation_client.py`)
+
+  If a user mistakenly writes `command: "py mcp_server.py"` (string,
+  no `- ` list marker) instead of `command: ["py", ...]`,
+  `list("py mcp_server.py")` produces `['p', 'y', ' ', ...]` and Popen
+  fails with `FileNotFoundError: 'p'`. The diagnostic block then
+  reports "peer unreachable: 'p'" — cryptic.
+
+  Fixed: `MCPClient.__init__` now validates that every expanded
+  command token is a non-empty string; otherwise raises `ValueError`
+  with a clear message naming the field, the bad value, and the
+  required shape (`- "..."`). `federate_search` / `federate_spec_preflight`
+  catch `ValueError` → `peers_unreachable` with the readable reason.
+
+- **L1 — PRD documentation drift: "asyncio" vs threading**
+  (`docs/PRD-v1.12-cross-wiki-federation.md` §Risks)
+
+  Pre-v2.11.1: PRD risk section said "parallel fan-out (asyncio)" but
+  impl uses `ThreadPoolExecutor`. Fixed to "threading via ThreadPoolExecutor".
+
+### Not in scope (deferred)
+
+Codex findings handled here: H1, M1, M3, M4, L1.
+Deferred to follow-up commits when convenient:
+
+- **M2** — Phase 3 federated preflight passes local filesystem path to
+  peer. Works for same-machine stdio; breaks future SSE. Fix when SSE
+  lands (v2.12+) by reading draft content client-side and passing via
+  a new `new_spec_content:` argument.
+- **L2-L5, N1-N3** — polish-grade: `except Exception` over-catch,
+  reader queue unboundedness, Windows pipe-buffering edge cases, etc.
+
+### Validation
+
+All 41 smoke tests pass (39 prior + 2 new for H1/M1 regressions).
+Pre-commit hook clean.
+
+### Migration
+
+Drop-in. Behavior change: malformed `.federation.yaml` now writes to
+stderr. If a user had a broken yaml that was silently producing
+empty results, they'll now see the warning and can act on it. Not a
+breaking change — empty result is the same, the user just gets
+notified.
+
+---
+
 ## [2.11.0] — 2026-05-19 — v1.12 cross-wiki federation Phase 3 (federated spec preflight + enforcement)
 
 **v1.12 is complete.** The four-phase plan from PRD-v1.12 ships: each

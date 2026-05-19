@@ -158,16 +158,36 @@ def load_federation_config(wiki_root: Path) -> list[dict]:
     cfg_path = wiki_root / ".federation.yaml"
     if not cfg_path.is_file():
         return []
+    # M1 (v2.11.1): emit stderr warnings on parse failure so the user
+    # can distinguish "no peers configured" (silent OK) from "registry
+    # is broken" (silent BUG pre-v2.11.1).
     try:
         text = cfg_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError) as e:
+        sys.stderr.write(
+            f"[federation_client] failed to read {cfg_path}: "
+            f"{type(e).__name__}: {e}\n"
+            f"Federation peers will not load.\n"
+        )
         return []
     try:
         parsed = _parse_yaml_block(text)
-    except Exception:
+    except Exception as e:
+        sys.stderr.write(
+            f"[federation_client] {cfg_path} is malformed YAML: "
+            f"{type(e).__name__}: {e}\n"
+            f"Federation peers will not load. Fix the file or remove "
+            f"it. Common cause on Windows: unquoted `C:/...` path in "
+            f"`command:` array (stdlib YAML parser treats bare colons "
+            f"as mapping separators).\n"
+        )
         return []
     peers = parsed.get("peers") or []
     if not isinstance(peers, list):
+        sys.stderr.write(
+            f"[federation_client] {cfg_path}: `peers:` must be a list "
+            f"(got {type(peers).__name__}); ignoring registry.\n"
+        )
         return []
     return [p for p in peers if isinstance(p, dict)]
 
@@ -238,6 +258,17 @@ class MCPClient:
         # Expand ~ in command tokens (e.g. when stdio command points at
         # a script under ~/.kata or args contain ~/.llm-wiki/...).
         expanded = [os.path.expanduser(str(t)) for t in self.command]
+        # M4 validation: peer registry might have `command:` as a string
+        # (user mistake — yaml without the `- ` list marker). list("str")
+        # iterates chars, producing a Popen call that fails with
+        # FileNotFoundError on `'p'`. Catch the misconfiguration here
+        # with a clear error message before Popen.
+        if not all(isinstance(t, str) and t for t in expanded):
+            raise ValueError(
+                f"peer {self.name!r}: 'command' must be a list of non-empty "
+                f"strings (got {self.command!r}). Check .federation.yaml — "
+                f"each command token needs its own `- \"...\"` line."
+            )
         self.proc = subprocess.Popen(
             expanded,
             stdin=subprocess.PIPE,
@@ -250,40 +281,54 @@ class MCPClient:
         )
         self._start_reader()
 
-        # initialize handshake
+        # H1 (v2.11.1): wrap post-spawn init in try/except that cleans up
+        # the subprocess on ANY failure. Pre-v2.11.1, if initialize timed
+        # out / failed / hit wiki_id mismatch, the subprocess leaked
+        # (with-block's __exit__ never runs since __enter__ never
+        # returned). Identity-check failure is the most-likely trip, so
+        # the leak compounded with every misconfigured peer.
         try:
-            init_reply = self._call("initialize", {
-                "protocolVersion": MCP_PROTOCOL_VERSION,
-                "clientInfo": {
-                    "name": FEDERATION_CLIENT_NAME,
-                    "version": FEDERATION_CLIENT_VERSION,
-                },
-                "capabilities": {},
-            })
-        except TimeoutError as e:
-            raise TimeoutError(
-                f"peer {self.name!r} initialize timed out after "
-                f"{self.timeout}s: {e}"
-            )
+            # initialize handshake
+            try:
+                init_reply = self._call("initialize", {
+                    "protocolVersion": MCP_PROTOCOL_VERSION,
+                    "clientInfo": {
+                        "name": FEDERATION_CLIENT_NAME,
+                        "version": FEDERATION_CLIENT_VERSION,
+                    },
+                    "capabilities": {},
+                })
+            except TimeoutError as e:
+                raise TimeoutError(
+                    f"peer {self.name!r} initialize timed out after "
+                    f"{self.timeout}s: {e}"
+                )
 
-        if "error" in init_reply:
-            raise RuntimeError(
-                f"peer {self.name!r} initialize failed: {init_reply['error']}"
-            )
+            if "error" in init_reply:
+                raise RuntimeError(
+                    f"peer {self.name!r} initialize failed: "
+                    f"{init_reply['error']}"
+                )
 
-        self.peer_server_info = init_reply.get("result", {}).get("serverInfo", {})
-        kata_info = self.peer_server_info.get("kata") or {}
-        self.actual_wiki_id = kata_info.get("wiki_id")
+            self.peer_server_info = init_reply.get("result", {}).get("serverInfo", {})
+            kata_info = self.peer_server_info.get("kata") or {}
+            self.actual_wiki_id = kata_info.get("wiki_id")
 
-        # Identity check — PRD D1.5
-        if self.expected_wiki_id and self.actual_wiki_id != self.expected_wiki_id:
-            raise WikiIdMismatchError(
-                f"peer {self.name!r}: expected wiki_id "
-                f"{self.expected_wiki_id!r}, got {self.actual_wiki_id!r}"
-            )
+            # Identity check — PRD D1.5
+            if self.expected_wiki_id and self.actual_wiki_id != self.expected_wiki_id:
+                raise WikiIdMismatchError(
+                    f"peer {self.name!r}: expected wiki_id "
+                    f"{self.expected_wiki_id!r}, got {self.actual_wiki_id!r}"
+                )
 
-        # Send initialized notification (no response per spec)
-        self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+            # Send initialized notification (no response per spec)
+            self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        except BaseException:
+            # BaseException catches KeyboardInterrupt + SystemExit too so
+            # we clean up the subprocess on Ctrl-C as well. Re-raise to
+            # propagate the original exception unchanged.
+            self.close()
+            raise
 
     def close(self) -> None:
         if not self.proc:

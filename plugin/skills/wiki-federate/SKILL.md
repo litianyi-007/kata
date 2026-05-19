@@ -85,8 +85,10 @@ python {plugin_root}/scripts/federation_client.py federate-search \\
     [--no-federate]
 ```
 
-Runs local search **in parallel** with fan-out to each enabled peer.
-Merges results into a single ranked envelope.
+Runs local search, **then** fans out **in parallel** to each enabled
+peer. Merges all results into a single ranked envelope. (Local search
+blocks before fan-out begins — peer queries don't start until local
+completes. Slow local search = delayed peer queries.)
 
 **Output shape**:
 

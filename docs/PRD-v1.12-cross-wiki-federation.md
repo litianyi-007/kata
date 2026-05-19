@@ -693,7 +693,7 @@ peers.
 - **Latency in deep query fan-out.** If kata A federates with 5
   peers, every wiki-query waits for the slowest one (up to
   `timeout_seconds`). Mitigation: per-peer timeout + parallel
-  fan-out (asyncio) + `peers_timed_out` diagnostic so the user can
+  fan-out (threading via ThreadPoolExecutor) + `peers_timed_out` diagnostic so the user can
   see which peer slowed them down.
 - **Stale citations.** A's kata page cites `kata://B/X.md`. B later
   archives or moves X.md. A's citation becomes unresolvable.

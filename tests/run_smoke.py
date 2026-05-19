@@ -3390,6 +3390,124 @@ exit 0
     print("  ok  T-fed-5c: kata://<wiki_id>/path declaration also accepted "
           "(name-form OR uuid-form both normalize to same match key)")
 
+    print("\nTest 40: v2.11.1 — MCPClient cleanup on connect() failure (T-fed-6)")
+    # H1 regression test: pre-v2.11.1, when MCPClient.connect() raised
+    # post-Popen (TimeoutError / RuntimeError / WikiIdMismatchError),
+    # the subprocess leaked. Verify connect() now cleans up by checking
+    # self.proc is None after the raise. Inline test via subprocess
+    # invocation of an embedded Python script so we exercise the class
+    # API directly (smoke can't easily import federation_client because
+    # it sits under plugin/scripts/ — same pattern as other inline tests).
+    leak_test_code = f'''
+import json, sys
+sys.path.insert(0, {repr(str(SCRIPTS))})
+from federation_client import MCPClient, WikiIdMismatchError
+
+# Peer with deliberately wrong wiki_id → identity check will fail
+peer = {{
+    "name": "leak-test-peer",
+    "wiki_id": "99999999-1111-4222-8333-444444444444",  # wrong on purpose
+    "endpoint": "stdio",
+    "command": [
+        {repr(sys.executable.replace(chr(92), "/"))},
+        {repr(str(SCRIPTS / "mcp_server.py").replace(chr(92), "/"))},
+        "--wiki",
+        {repr(str(mcp_wiki).replace(chr(92), "/"))},  # mcp_wiki from T-mcp tests
+    ],
+    "timeout_seconds": 15,
+}}
+
+client = MCPClient(peer)
+caught = None
+try:
+    client.connect()
+except WikiIdMismatchError as e:
+    caught = ("WikiIdMismatchError", str(e))
+except Exception as e:
+    caught = (type(e).__name__, str(e))
+
+# After the raise, self.proc must be None (close() ran in connect's
+# except-handler). Before v2.11.1 fix, this was the orphaned Popen.
+proc_cleaned = client.proc is None
+print(json.dumps({{
+    "caught": caught,
+    "proc_cleaned": proc_cleaned,
+    "actual_wiki_id": client.actual_wiki_id,
+}}))
+'''
+    leak_proc = subprocess.run(
+        [sys.executable, "-c", leak_test_code],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "PYTHONUTF8": "1"},
+        timeout=30,
+    )
+    if leak_proc.returncode != 0:
+        print(f"FAIL: T-fed-6 inline script exited {leak_proc.returncode}")
+        print("stderr:", leak_proc.stderr[:500])
+        sys.exit(1)
+    leak_result = json.loads(leak_proc.stdout)
+    assert leak_result["caught"] is not None, \
+        f"T-fed-6: expected exception on mismatched wiki_id; got {leak_result}"
+    assert_eq("T-fed-6: caught exception type",
+              leak_result["caught"][0], "WikiIdMismatchError")
+    assert_eq("T-fed-6: subprocess cleaned up after connect() failure (H1)",
+              leak_result["proc_cleaned"], True)
+    print("  ok  T-fed-6: MCPClient.connect() identity-check failure → "
+          "self.proc is None (no subprocess leak; H1 fix verified)")
+
+    print("\nTest 41: v2.11.1 — load_federation_config stderr warnings (T-fed-7)")
+    # M1 regression test: malformed .federation.yaml must emit stderr
+    # warning (not silently look identical to "no peers configured").
+    bad_yaml_wiki = FIXTURE.parent / "_fed_bad_yaml"
+    if bad_yaml_wiki.exists():
+        _windows_safe_rmtree(bad_yaml_wiki)
+    bad_yaml_wiki.mkdir(parents=True)
+    # Deliberately malformed YAML — uses YAML anchor (&), which the
+    # stdlib subset parser explicitly rejects (see wiki_lib._parse_scalar).
+    # This is a known-bad token, not a parser fuzz attempt.
+    (bad_yaml_wiki / ".federation.yaml").write_text(
+        "peers:\n  - name: broken\n    wiki_id: &anchor-syntax-not-supported\n    endpoint: stdio\n",
+        encoding="utf-8",
+    )
+
+    yaml_warn_code = f'''
+import sys, json
+sys.path.insert(0, {repr(str(SCRIPTS))})
+import io, contextlib
+from pathlib import Path
+from federation_client import load_federation_config
+
+stderr_capture = io.StringIO()
+with contextlib.redirect_stderr(stderr_capture):
+    peers = load_federation_config(Path({repr(str(bad_yaml_wiki).replace(chr(92), "/"))}))
+
+print(json.dumps({{
+    "peer_count": len(peers),
+    "stderr": stderr_capture.getvalue(),
+}}))
+'''
+    yaml_proc = subprocess.run(
+        [sys.executable, "-c", yaml_warn_code],
+        capture_output=True, text=True, encoding="utf-8",
+        env={**os.environ, "PYTHONUTF8": "1"},
+        timeout=10,
+    )
+    if yaml_proc.returncode != 0:
+        print(f"FAIL: T-fed-7 inline script exited {yaml_proc.returncode}")
+        print("stderr:", yaml_proc.stderr[:500])
+        sys.exit(1)
+    yaml_result = json.loads(yaml_proc.stdout)
+    assert_eq("T-fed-7: malformed yaml → empty peer list",
+              yaml_result["peer_count"], 0)
+    stderr_text = yaml_result["stderr"]
+    assert "[federation_client]" in stderr_text, \
+        f"T-fed-7: expected federation_client warning on stderr; got: {stderr_text!r}"
+    assert "malformed YAML" in stderr_text or "is malformed" in stderr_text, \
+        f"T-fed-7: stderr must explain the file is malformed; got: {stderr_text!r}"
+    print("  ok  T-fed-7: malformed .federation.yaml → empty peers + "
+          "stderr warning ([federation_client] ... is malformed YAML ...) "
+          "(M1 fix verified)")
+
     print("\nAll smoke tests passed.")
     return 0
 
