@@ -101,16 +101,40 @@ def _strip_wikilink_brackets(s: str) -> str:
 def _resolve_local_target(wiki_root: Path, target: str) -> Path | None:
     """Given a `spec_relationships.target` string, resolve to a local
     wiki page on disk. Returns None for kata:// URIs (caller handles
-    those via the reverse-index path) or unresolvable references."""
+    those via the reverse-index path), unresolvable references, or
+    paths that would escape the wiki root.
+
+    Path-traversal guard: absolute targets are rejected outright; relative
+    targets with `..` segments are resolved and then checked with
+    `relative_to(wiki_root)`. Without this guard, a malicious or accidental
+    `spec_relationships.target` of `"../../../etc/foo"` could cause kata to
+    propagate a banner/tier flip onto a file outside the wiki.
+    """
     if _is_kata_uri(target):
         return None
     t = _strip_wikilink_brackets(target)
+    if not t:
+        return None
+    # Reject absolute targets. The spec contract says `target` is wiki-
+    # relative path (or stem, or kata:// URI). An absolute path is a
+    # bug, an attack, or both — never legitimate.
+    if Path(t).is_absolute():
+        return None
     if not t.endswith(".md"):
         t = t + ".md"
-    candidate = wiki_root / t
+    root_resolved = wiki_root.resolve()
+    candidate = (wiki_root / t).resolve()
+    try:
+        candidate.relative_to(root_resolved)
+    except ValueError:
+        # Resolved path escapes the wiki root — reject. This catches
+        # `../../etc/foo`, Windows alt-separator escape, and symlink
+        # traversal.
+        return None
     if candidate.is_file():
         return candidate
-    # Stem-only declaration ("F015-old") — search wiki for matching stem
+    # Stem-only declaration ("F015-old") — search wiki for matching stem.
+    # rglob is scoped to wiki_root so this branch can't escape.
     stem = Path(t).stem.lower()
     for md in wiki_root.rglob("*.md"):
         if "raw" in md.parts or "_archive" in md.parts:
@@ -382,14 +406,22 @@ def main() -> int:
     spec_authoring = schema.get("spec_authoring") or {}
     auto_prop = spec_authoring.get("auto_propagation") or {}
 
-    if not auto_prop.get("enabled", False):
+    # Strict bool check — `bool("false")` is True in Python, and SCHEMA.md
+    # is YAML which doesn't always coerce; require the value to be exactly
+    # the literal True. Anything else (missing, false, "false", null, 0)
+    # disables propagation.
+    if auto_prop.get("enabled") is not True:
         emit({
             "phase": 3,
             "enabled": False,
-            "advisory": ("auto_propagation.enabled is false in SCHEMA.md; "
-                         "no propagation performed. Set "
+            "advisory": ("auto_propagation.enabled is not literal true in "
+                         "SCHEMA.md; no propagation performed. Set "
                          "`spec_authoring.auto_propagation.enabled: true` "
-                         "to opt in."),
+                         "to opt in. **Phase 3 PREVIEW**: see "
+                         "PRD-v1.14-spec-propagation-reconcile.md for the "
+                         "transactional reland; v2.13.x propagation is "
+                         "append-only and not reversible — opt in at own "
+                         "risk."),
         })
         return 0
 

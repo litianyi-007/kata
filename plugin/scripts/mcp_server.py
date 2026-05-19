@@ -76,10 +76,24 @@ from wiki_lib import (  # noqa: E402
 # revision; bump when the wire format changes (rare).
 MCP_PROTOCOL_VERSION = "2024-11-05"
 KATA_SERVER_NAME = "kata-wiki"
-KATA_SERVER_VERSION = "2.9.0"
 
 # Path to sibling helper scripts (same directory as this file)
 SCRIPTS_DIR = Path(__file__).resolve().parent
+
+
+def _read_plugin_version() -> str:
+    """Single source of truth — read kata version from plugin.json.
+    Falls back to "unknown" if the file is missing or malformed (e.g.
+    when this script is copied out of the plugin tree for testing)."""
+    try:
+        plugin_json = SCRIPTS_DIR.parent / ".claude-plugin" / "plugin.json"
+        return str(json.loads(plugin_json.read_text(encoding="utf-8"))
+                    .get("version", "unknown"))
+    except (OSError, ValueError):
+        return "unknown"
+
+
+KATA_SERVER_VERSION = _read_plugin_version()
 
 
 # ---------------------------------------------------------------------------

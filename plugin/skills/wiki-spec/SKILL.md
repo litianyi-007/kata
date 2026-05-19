@@ -95,11 +95,32 @@ python {plugin_root}/scripts/spec_propagate.py \
     --new-spec {wiki-relative-or-absolute-path}
 ```
 
-## Phase 4 (future)
+## Phase 3 PREVIEW caveat
+
+Phase 3 (auto-propagation) is shipped as **opt-in preview** in v2.13.x.
+`spec_authoring.auto_propagation.enabled` defaults to `false` and **must be
+the literal `true`** (string `"false"` no longer coerces to truthy).
+
+The v2.13.x implementation is **append-only**: when a new spec is later
+edited to drop or downgrade a `kind: supersedes` declaration, the previously
+written banner / `spec_superseded_by` / `tier_override` on the old target
+**are not reverted**. This means stale propagation state can itself become a
+new drift source — exactly the failure mode v1.13 set out to prevent.
+
+The transactional reland with reconcile / rollback semantics is tracked in
+`docs/PRD-v1.14-spec-propagation-reconcile.md`. Until v1.14 ships:
+
+- Default-off is the safe state for production wikis
+- If you opt in, treat the file edit on the **superseded** page as a deliberate
+  write — do not assume removing the source spec's relationship will undo it
+- For untrusted spec authoring (e.g. ingest of third-party files), keep Phase 3
+  off and rely on Phase 0 advisory + Phase 2 enforcement only
+
+## Phase 4 (shipped v2.13.0)
 
 | Phase | Adds |
 |---|---|
-| 4 | `wiki-graph --spec-history <topic>` coherence view (lineage tree) |
+| 4 | `wiki-graph --spec-history <topic>` coherence view (lineage tree); text / json / mermaid output |
 
 See `docs/PRD-v1.13-spec-history-management.md` for full design.
 
@@ -285,10 +306,10 @@ After running:
 Per `plugin/CLAUDE.md`, use the standard `[Operation] / [Changes] / [Summary] /
 [Suggested next]` block on completion.
 
-## Known limitations (Phase 0+2)
+## Known limitations (Phase 0+2+3+4)
 
-- **No auto-propagation** — Phase 3
-- **No coherence view** (lineage tree) — Phase 4
+- **Auto-propagation is preview** — Phase 3 ships opt-in (default off) and is append-only. See Phase 3 PREVIEW caveat above; v1.14 will reland with transactional reconcile semantics.
+- **Reverse-index not in lineage tree** — Phase 4 reads `.spec-reverse-index.yaml` for counts but does not yet stitch its edges into the rendered lineage. Cross-wiki supersession is recorded but not walked. Tracked for v1.14.
 - **Heuristic scoring** — title/tag/link/hub weights are hardcoded; later phases may make them schema-configurable
 - **No relationship suggestion** — preflight surfaces candidates but does NOT suggest a relationship kind; the author decides
 - **Threshold calibration is per-wiki** — the default `enforcement_score_threshold: 5.0` is calibrated against the smoke-test fixture; high-volume / rich-frontmatter wikis may need a higher threshold to avoid false enforcement triggers

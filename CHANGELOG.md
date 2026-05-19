@@ -4,6 +4,86 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.13.1] — 2026-05-19 — codex audit hardening (path traversal + Phase 3 PREVIEW)
+
+Response patch to Codex GPT-5.5 xhigh audit task-mpci827r-1prafp (verdict
+**hold-for-changes** on v1.13 SHM). This patch lands the critical security
+fix + the cheapest hardening that's safe to ship same-day. The structural
+findings (Phase 3 cannot reverse, no transaction, multi-superseder semantics,
+reverse-index not in lineage, federated/local key collision) are tracked
+separately in `docs/PRD-v1.14-spec-propagation-reconcile.md` and will reland
+the entire propagation pipeline against a transaction model. Until v1.14
+ships, Phase 3 is officially **opt-in preview** — see warnings below.
+
+### Fixed (security)
+
+- **Critical: path-traversal in `spec_propagate.py`** — a `spec_relationships`
+  declaration of `target: ../../foo.md` or absolute path could cause kata to
+  write a banner / `spec_superseded_by` frontmatter / `tier_override`
+  archive flip to a file outside the wiki root. `_resolve_local_target()`
+  now: (a) rejects absolute target paths outright, (b) resolves the
+  candidate and requires `relative_to(wiki_root.resolve())`, (c) rejects
+  empty targets after wikilink-strip. Sibling `rglob` branch was already
+  scope-safe but is now explicitly commented. New smoke test **T-prop-6**
+  asserts an outside-wiki sentinel file is byte-identical after a
+  malicious spec attempts both traversal flavors.
+
+### Changed (Phase 3 PREVIEW posture)
+
+- `spec_propagate.py`: `auto_propagation.enabled` truthiness changed from
+  `bool(value)` to `value is True`. String `"false"` no longer coerces;
+  required value is now the literal YAML `true`.
+- `spec_preflight.py`: same hardening on
+  `spec_authoring.enforce_relationship_declaration`. Avoids the symmetrical
+  enforcement-bypass.
+- Disabled-state advisory now explicitly labels Phase 3 as PREVIEW and
+  points at the v1.14 PRD for the reconcile reland.
+
+### Changed (docs)
+
+- `plugin/skills/wiki-spec/SKILL.md`: new "Phase 3 PREVIEW caveat" section
+  documents the append-only failure mode. Phase 4 section updated from
+  "(future)" to "(shipped v2.13.0)". "Known limitations" rewritten to
+  reflect the actual phase coverage.
+- `plugin/skills/wiki-ingest/SKILL.md`: stale `external://` URI example
+  in `spec_relationships` template replaced with `kata://<peer>/<path>`
+  (federation contract, post v1.12). Added path-traversal note.
+- `docs/PRD-v1.13-spec-history-management.md`: header now carries a
+  PREVIEW status update referencing the codex audit; "External-target
+  carve-out" section reworked to use the `kata://` URI scheme (v1.12)
+  instead of the dead `external://` scheme (v1.13 Phase 1 was reverted).
+
+### Fixed (correctness)
+
+- `schema/wiki-schema.json`: `spec_authoring` was only defined under
+  `$defs` and never referenced from top-level `properties`. Validation
+  silently passed any junk under `spec_authoring`. Added
+  `properties.spec_authoring: {"$ref": "#/$defs/spec_authoring"}`.
+- `plugin/scripts/mcp_server.py`: `KATA_SERVER_VERSION` no longer
+  hardcoded ("2.9.0" stale). Now read from `plugin.json` at import time
+  with safe `"unknown"` fallback. Single source of truth.
+
+### Note on the structural verdict
+
+The codex audit's "biggest worry" — that Phase 3 creates authoritative-
+looking metadata it cannot reconcile — is acknowledged and NOT fixed in
+this patch. Banner write-then-orphan, multi-superseder merge collision,
+supersedes→refines reversal, and concurrent ingest races remain open.
+These are structural and need the v1.14 transaction model, not point
+patches. Phase 3 default-off + PREVIEW labeling is the interim mitigation;
+production wikis should not opt in until v1.14 ships.
+
+### Audit trail
+
+- Codex task: `task-mpci827r-1prafp` — GPT-5.5 xhigh, 10m43s, completed
+- Verdict: `hold-for-changes`. Per-phase: Phase 0/4 ship-with-caveats,
+  Phase 2/3 hold-for-changes
+- Critical: 1 (path traversal — fixed here)
+- High: 6 (1 fixed: schema $ref; 5 deferred to v1.14)
+- Medium: 5 (deferred to v1.14)
+- Low: 3 (2 fixed here: external:// docs, mcp_server version; 1 deferred:
+  wiki-spec Phase 4 "future" wording — also fixed here)
+
 ## [2.13.0] — 2026-05-19 — v1.13 SHM Phase 4 (spec-history lineage view)
 
 **v1.13 SHM complete.** Closes the 4-phase plan from PRD-v1.13. Adds

@@ -117,15 +117,22 @@ along with the relevance signals (`title_overlap`, `tag_overlap`,
    ```yaml
    spec_relationships:
      - kind: supersedes | refines | extends | parallel | contradicts
-       target: <wiki-path-of-old-spec>     # or external://<source>/<rel> URI
+       target: <wiki-path-of-old-spec>     # or kata://<peer>/<path> URI for federated targets
        note: "<one-line rationale>"
    ```
 
-Phase 0 does **not** auto-update the old spec — `kind: supersedes` does NOT
-trigger a banner / tier flip / reverse-link on the target page yet. Phase 3
-will add that. If a relationship clearly implies the old spec is dead, the
-author may also want to manually run `wiki-tier --pin <old-spec>:archived`
-or add a `tier_override:` line by hand.
+   `target` accepts: wiki-relative path, `[[wikilink]]`, bare stem
+   (resolved by wiki-wide stem search), or `kata://<peer-or-uuid>/<path>`
+   for a peer wiki registered in `.federation.yaml`. Absolute paths and
+   `..` segments are rejected by Phase 3's path-traversal guard.
+
+Phase 0 itself does **not** auto-update the old spec. Phase 3
+(opt-in preview, off by default) adds banner + tier flip + reverse-link
+on the target page when `auto_propagation.enabled: true`. See
+`wiki-spec` skill for the Phase 3 PREVIEW caveat. If a relationship
+clearly implies the old spec is dead and Phase 3 is off, the author may
+manually run `wiki-tier --pin <old-spec>:archived` or add a
+`tier_override:` line by hand.
 
 **Phase 2 enforcement gate (v1.13, v2.4.0+)**:
 

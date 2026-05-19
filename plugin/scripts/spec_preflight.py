@@ -417,7 +417,9 @@ def main() -> int:
     # Phase 2: enforcement check.
     # Active when --enforce is passed OR schema's
     # `spec_authoring.enforce_relationship_declaration` is true.
-    schema_enforce = bool(spec_authoring.get("enforce_relationship_declaration", False))
+    # Strict bool check — `bool("false")` is True in Python; require the
+    # schema value to be exactly literal true. CLI flag is a normal bool.
+    schema_enforce = spec_authoring.get("enforce_relationship_declaration") is True
     enforcement_active = bool(args.enforce) or schema_enforce
 
     enforcement_block: dict | None = None

@@ -3713,6 +3713,74 @@ print(json.dumps({{
     print("  ok  T-prop-5: dreamer skips spec_superseded_by-marked pages "
           "(v1.6 dogfood channel-mismatch finding closed)")
 
+    # T-prop-6: path-traversal guard (v2.13.1 — codex audit critical fix).
+    # A new spec declaring a `supersedes` target with `..` segments or an
+    # absolute path must NOT result in propagation writing outside the
+    # wiki root. Both kinds of bad target should land in the `skipped`
+    # list with no in-place propagation issued.
+    #
+    # Isolated parent dir so the outside-the-wiki sentinel doesn't pollute
+    # tests/. Both traversal_wiki and its parent are torn down at end.
+    trv_parent = FIXTURE.parent / "_prop_traversal_parent"
+    if trv_parent.exists():
+        _windows_safe_rmtree(trv_parent)
+    trv_parent.mkdir(parents=True)
+    traversal_wiki = trv_parent / "wiki"
+    (traversal_wiki / "decisions").mkdir(parents=True)
+    (traversal_wiki / "SCHEMA.md").write_text(
+        "## Identity\n\n```yaml\nwiki_id: ffff1111-2222-4333-8444-555555555599\n```\n\n"
+        "## Domain\ntraversal fixture\n\n"
+        "## Categories\n\n```yaml\ncategories:\n  - name: decisions\n    purpose: decisions\n```\n\n"
+        "## Spec authoring\n\n```yaml\nspec_authoring:\n  enabled: true\n"
+        "  spec_types: [decisions]\n"
+        "  auto_propagation:\n    enabled: true\n"
+        "    kinds_to_propagate: [supersedes]\n"
+        "    auto_tier_flip: true\n```\n",
+        encoding="utf-8")
+    (traversal_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (traversal_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+
+    # Sentinel file outside the wiki but inside isolated parent — propagation
+    # MUST NOT touch it.
+    sentinel = trv_parent / "outside-sentinel.md"
+    sentinel.write_text(
+        "---\ntitle: outside sentinel\n---\n# DO NOT TOUCH\n",
+        encoding="utf-8")
+    sentinel_original = sentinel.read_text(encoding="utf-8")
+
+    abs_target = sentinel.resolve().as_posix()
+    (traversal_wiki / "decisions" / "F999-malicious.md").write_text(
+        "---\n"
+        "type: decisions\n"
+        "title: malicious spec\n"
+        "spec_relationships:\n"
+        "  - kind: supersedes\n"
+        "    target: ../outside-sentinel.md\n"
+        "    note: \"traversal via dotdot — should be rejected\"\n"
+        "  - kind: supersedes\n"
+        f"    target: {abs_target}\n"
+        "    note: \"traversal via absolute path — should be rejected\"\n"
+        "---\n# malicious body\n",
+        encoding="utf-8")
+
+    prop_trv = run([str(SCRIPTS / "spec_propagate.py"),
+                    "--wiki", str(traversal_wiki),
+                    "--new-spec", "decisions/F999-malicious.md"])
+    assert_eq("T-prop-6: phase marker", prop_trv["phase"], 3)
+    assert_eq("T-prop-6: no in-place propagations issued",
+              len(prop_trv.get("propagations", [])), 0)
+    skipped_targets = {s.get("target") for s in prop_trv.get("skipped", [])}
+    assert "../outside-sentinel.md" in skipped_targets, \
+        f"traversal via .. must be skipped; got skipped={skipped_targets}"
+    assert abs_target in skipped_targets, \
+        f"absolute-path target must be skipped; got skipped={skipped_targets}"
+    # Sentinel byte-for-byte unchanged — the strongest assertion.
+    assert sentinel.read_text(encoding="utf-8") == sentinel_original, \
+        "outside-sentinel.md was modified — path traversal guard FAILED"
+    print("  ok  T-prop-6: path-traversal guard rejects ../ and absolute "
+          "targets; outside-wiki sentinel byte-identical")
+    _windows_safe_rmtree(trv_parent)
+
     print("\nTest 47-49: v1.13 Phase 4 — spec-history lineage view (T-graph-1..3)")
     # Reuse the Phase 3 fixture wiki (prop_wiki) — F017 supersedes F015,
     # refines F011, supersedes kata://peer-z/F100 (cross-wiki). After

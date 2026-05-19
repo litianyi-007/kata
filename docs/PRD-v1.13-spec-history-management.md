@@ -41,9 +41,21 @@ spec_relationships:
 
 # PRD v1.13 — Spec History Management
 
-Status: Draft v1
-Date: 2026-05-16
+Status: Draft v1 — Phase 3 is PREVIEW in shipped v2.13.x
+Date: 2026-05-16 (last updated 2026-05-19 after codex audit task-mpci827r-1prafp)
 Author: surebeli
+
+> **Status update — 2026-05-19**: Phases 0, 2, 4 ship as `ship-with-caveats`.
+> Phase 3 (auto-propagation) is **opt-in preview** — the v2.13.x implementation
+> is append-only and cannot reverse banner / `spec_superseded_by` / tier flip
+> when the source spec is later edited to drop the `supersedes` declaration.
+> Stale propagated state thus becomes a new drift source — exactly the failure
+> mode v1.13 set out to prevent. The transactional reland with reconcile /
+> rollback semantics is tracked in
+> `docs/PRD-v1.14-spec-propagation-reconcile.md`. Until then,
+> `auto_propagation.enabled` defaults to `false` and must be the literal
+> `true` (string `"false"` no longer coerces). See
+> "Phase 3 PREVIEW caveat" in `plugin/skills/wiki-spec/SKILL.md`.
 
 ## Context
 
@@ -434,16 +446,17 @@ Re-ingesting F017 (e.g. after editing) does not duplicate the banner /
 reverse-link / tier override on F015. The propagation step checks for
 existing entries and updates only if changed.
 
-### External-target carve-out
+### Cross-wiki target carve-out
 
-`kind: supersedes` with `target: external://...` does NOT trigger
-file-modification on the external source. Instead, kata writes an
-**internal reverse-index** to a kata-managed file:
+`kind: supersedes` with `target: kata://<peer>/<path>` does NOT trigger
+file-modification on the peer wiki (v1.12 federation contract is
+read-only). Instead, kata writes an **internal reverse-index** to a
+kata-managed file at the local wiki root:
 
 ```yaml
-# decisions/.spec-reverse-index.md (kata-internal, gitignored by default)
+# {wiki_path}/.spec-reverse-index.yaml (kata-internal)
 external_supersessions:
-  - external_target: external://sdd-specs/F011-merge-back.md
+  - external_target: kata://sdd-specs/decisions/F011-merge-back
     superseded_by: decisions/F017-new.md
     date: 2026-05-16
     note: "F011 lane discipline absorbed into F017"
