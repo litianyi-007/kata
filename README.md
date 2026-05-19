@@ -28,8 +28,9 @@ Then in any project directory:
 claude /kata:wiki-init
 ```
 
-You now have 13 skills (`wiki-init`, `wiki-ingest`, `wiki-search`,
-`wiki-graph`, `wiki-tier`, `wiki-dream`, …) operating on a fresh wiki at
+You now have 17 skills (`wiki-init`, `wiki-ingest`, `wiki-search`,
+`wiki-graph`, `wiki-tier`, `wiki-dream`, `wiki-session-ingest`, `wiki-spec`,
+`wiki-sync`, …) operating on a fresh wiki at
 `~/.llm-wiki/<your-project>/`. Detailed install options below.
 
 ## What problem this solves
@@ -68,7 +69,7 @@ dimensions, memory-tier policy).
 | **Base** | [Karpathy's LLM-Wiki principle](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — compiled once, kept current; humans curate, LLMs maintain; everything optional and modular. |
 | **Core** | A **self-evolving knowledge system** built on the base: (1) a self-closing loop — ingest → cross-link → filed-query → compounding pages; (2) auto-dreaming — frozen pages resurface when their relevance returns. The wiki doesn't just persist; it grows back toward what's currently mattering. |
 | **Phase 1** *(current)* | **AI-paired engineering.** Use the core wiki to compile project business semantics — thresholds, lifecycle invariants, domain conventions — so AI agents read project conventions before they write code. v1.4 → v1.13 ship this reach. |
-| **Phase 1+** *(in flight)* | **Spec History Management (v1.13).** SDD / superpowers-style flows accumulate specs that drift apart over time. `wiki-spec preflight` makes new specs answer for the prior specs they overlap. Phase 0 (v2.2.0, advisory) and Phase 2 (v2.4.0, ingest-time enforcement) shipped — both kata-internal. Phase 1 (external-source backfill) was tried and removed in v2.5.0 (see CHANGELOG); cross-source authoring is handled by `wiki-import` or v1.12 federation. Phase 3-4 add auto-propagation and lineage view. |
+| **Phase 1+** *(shipped — Phase 3 preview)* | **Spec History Management (v1.13).** For SDD / superpowers-style flows that accumulate specs over time. `wiki-spec preflight` makes new specs answer for the prior specs they overlap. Phases 0/2 (advisory + ingest-time enforcement, v2.4.0), Phase 4 (lineage tree view, v2.13.0), Phase 3 (auto-propagation, v2.12.0 opt-in preview). Phase 1 (external-source backfill) was tried and removed in v2.5.0; cross-wiki authoring goes through v1.12 federation. The transactional reland of Phase 3 is tracked in `docs/PRD-v1.14-spec-propagation-reconcile.md`. |
 | **Phase 2** *(designed, not yet implemented)* | **Team spec authoring + dispute resolution.** A self-closing loop for spec drafts, ratified positions, and the rejected alternatives — so future decisions don't re-litigate the same questions. v1.13 is one of the substrates this rests on. |
 | **Phase 3+** | Open. The core extends to new boundaries as we learn what compounds. |
 
@@ -489,6 +490,8 @@ an uninitialized wiki; run `wiki-init` first for each project.
 | **wiki-digest** | `/kata:wiki-digest` | Karpathy | Activity, tier distribution, stale dimensions, coverage gaps |
 | wiki-query | `/kata:wiki-query <question>` | Karpathy | Answer with citations; file back; fallback to external plugins |
 | wiki-lint | `/kata:wiki-lint` | Karpathy | Structure + content + tier/dimension checks + SCHEMA.md evolution |
+| **wiki-session-ingest** | `/kata:wiki-session-ingest` | extension | Capture keeper insights from the active AI CLI session (Claude Code / Codex / others). Incremental by default — second run only picks up new messages. |
+| **wiki-spec** | `/kata:wiki-spec preflight <source>` | extension | Spec History Management — preflight scoring, ingest-time relationship enforcement, lineage tree view. For SDD / superpowers-style spec corpora. |
 
 > **Origin column**: "Karpathy" = concept described in the original; "extension" = added by this plugin. Even Karpathy-origin skills have been significantly expanded (image handling, tier filtering, external fallback, etc.)
 
@@ -932,6 +935,105 @@ the page into active). Manual `tier_override:` pins are supported.
 # Pin a canonical reference as permanently active
 /kata:wiki-tier --pin=concepts/attention.md:active
 ```
+
+## Save what you figured out in a session
+
+> Extension — closes the gap between "what I just figured out" and
+> "what's in the wiki tomorrow."
+
+After two hours of debugging with Claude Code or Codex, the keeper insights
+— the actual root cause, the rejected alternatives, the decision boundary —
+live inside the chat transcript. By the time you remember to write any of
+it down, half is gone.
+
+`wiki-session-ingest` reads your current session, ranks candidate knowledge
+points by confidence, lets you multi-select the keepers, and distills each
+through the standard `wiki-ingest` pipeline (page write, cross-links,
+log entry, the works). You decide what's worth keeping; kata handles the
+bookkeeping.
+
+```bash
+# End of a deep session — pick which insights to keep from a short list
+/kata:wiki-session-ingest
+
+# Call it again later in the same session — only NEW messages since
+# last capture are surfaced (incremental by default, v2.14.0+)
+/kata:wiki-session-ingest
+
+# Force a fresh sweep of the whole session from message #1
+/kata:wiki-session-ingest --full
+```
+
+**Smart sweep, not full reparse (v2.14.0+).** Re-running on the same
+session only looks at messages added since last capture — no duplicate
+candidate work, no re-presenting the points you already decided to skip.
+The dump file's filename stays stable across days too, so a multi-day
+session doesn't fragment into per-day files.
+
+**Works with**:
+- **Claude Code** + **Codex CLI** — JSONL transcript adapters, automatic
+- **Gemini / Copilot / OpenCode / Kimi / any other CLI** — LLM-dump
+  fallback where the active agent writes its own session summary
+
+**Privacy reminder**: the raw session dump is markdown in your wiki repo,
+so it ships through `wiki-sync`. Eyeball it before syncing if the session
+touched secrets — a `--scrub-secrets` flag is on the v1.12 candidate list.
+
+## Keep your spec corpus from drifting
+
+> Extension — for spec-driven-development (SDD) / superpowers-style flows
+> that produce many specs over time.
+
+Spec-driven development works until the spec corpus accumulates for six
+months and no one can tell which spec is canonical for a given area. New
+specs silently overlap with old ones. Old specs that should be archived
+stay surfaced. Redesign decisions get re-litigated because the prior
+decision was buried two folders deep.
+
+`wiki-spec` adds three checkpoints to your ingest flow:
+
+```bash
+# At ingest time: scan for related prior specs (Phase 0 — advisory)
+/kata:wiki-spec preflight raw/new-spec.md
+
+# Same, but block ingest until the author declares how this spec
+# relates to the prior ones (Phase 2 — configurable via SCHEMA.md)
+/kata:wiki-ingest raw/new-spec.md      # auto-runs preflight + enforcement
+
+# Visualize the lineage from any spec (Phase 4 — v2.13.0)
+/kata:wiki-graph --mode spec-history --seed decisions/F017-new-auth.md
+```
+
+The author declares relationships in the new spec's frontmatter using a
+short vocabulary — `supersedes`, `refines`, `extends`, `parallel`,
+`contradicts` — and those become part of the queryable graph. The
+lineage view renders as ASCII tree, JSON, or Mermaid graph — pick the
+format that fits where the team consumes it (terminal / wiki page /
+chat).
+
+```yaml
+# In the new spec's frontmatter
+spec_relationships:
+  - kind: supersedes
+    target: decisions/F015-old-auth.md
+    note: "F015 fully replaced; new token model"
+  - kind: refines
+    target: decisions/F011-merge-back.md
+    note: "lane discipline still applies"
+```
+
+**Phase 3 (auto-propagation) is opt-in preview.** When the author
+declares `kind: supersedes`, kata can automatically banner the superseded
+spec + flip it to archived + write a reverse-link. The v2.13.x
+implementation ships default-off because it can't yet reverse itself
+when the source spec is later edited to drop the supersession. The
+transactional reland is tracked in
+[`docs/PRD-v1.14-spec-propagation-reconcile.md`](docs/PRD-v1.14-spec-propagation-reconcile.md).
+
+**Cross-wiki**: spec relationships can target peer wikis via
+`kata://<peer>/<path>` URIs (v1.12 federation). kata never writes to peer
+wikis — federation contract is read-only — but it records the supersession
+in a local `.spec-reverse-index.yaml` that the lineage view walks.
 
 ## Auto-ingest from raw/ (the watcher)
 
