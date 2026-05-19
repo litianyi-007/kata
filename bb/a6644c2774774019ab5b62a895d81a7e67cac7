@@ -1,0 +1,22 @@
+README.md
+  s_72932b77f23d8b::t_a7a1f8b201566a 31-33
+  s_72932b77f23d8b::t_21b494b7a1d8ba 72
+  s_72932b77f23d8b::t_7866ac9256cbf4 493-494
+  s_72932b77f23d8b::t_2a63c81db77028 939-1037
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "bba6644c2774774019ab5b62a895d81a7e67cac7",
+  "prompts": {},
+  "sessions": {
+    "s_72932b77f23d8b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47f3ca6e-6f5b-49f0-9786-93af47802ab0",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "surebeli <surebeli@gmail.com>"
+    }
+  }
+}
