@@ -4,6 +4,121 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.13.0] — 2026-05-19 — v1.13 SHM Phase 4 (spec-history lineage view)
+
+**v1.13 SHM complete.** Closes the 4-phase plan from PRD-v1.13. Adds
+visualization layer: `wiki-graph --mode spec-history` walks the
+supersedes / refines chain from a seed page and renders as ASCII tree,
+JSON, or Mermaid graph DSL. Includes cross-wiki via the v1.12
+federation channel (kata:// supersedes shown as federated leaves;
+reads `.spec-reverse-index.yaml` written by Phase 3).
+
+### Added
+
+- **`graph_query.py --mode spec-history`** — new mode alongside
+  neighbors / shortest-path / hubs / orphans / cluster / stats:
+  - **Outbound walk**: from seed, follows `spec_relationships:` array
+    recursively (depth-limited, cycle-safe via visited set). Each
+    edge has `kind` (supersedes / refines / extends / parallel /
+    contradicts) + target page metadata (title, tier, published_at).
+  - **Inbound walk**: from seed, scans every other page in the wiki
+    for `spec_relationships.target` references pointing AT the seed.
+    Reports which pages declare relationships pointing at us.
+    Stem-fuzzy match (supports `[[wikilink]]`, full path,
+    bare stem).
+  - **Federation hooks**: `kata://<peer>/<path>` outbound edges
+    surface as `{kind, target_uri, federated: true, note}` leaves —
+    no recursion into peer (would require federation client
+    integration; deferred to v1.13+ polish).
+  - **Reverse-index integration**: reads `.spec-reverse-index.yaml`
+    (written by Phase 3 `spec_propagate.py` for kata:// supersedes)
+    and exposes count in the tree result. Future cross-wiki inbound
+    walk would use this — currently a Phase 5+ feature stub.
+
+- **`graph_query.py --format text|json|mermaid`** — new CLI flag for
+  spec-history mode output:
+  - **text** (default): ASCII tree with `supersedes→` arrow notation
+    and indented recursion
+  - **json**: nested dict tree (full structure, programmatic
+    consumption)
+  - **mermaid**: graph LR DSL with `-->|<kind>|` edge labels and
+    `EXT_*[(uri)]` federated nodes; embed directly in markdown /
+    Obsidian
+
+- **`wiki-graph` MCP tool inputSchema enum extended** to include
+  `spec-history` mode + new `format` enum property. Federation
+  clients can now request lineage trees from peer katas through MCP
+  (caller still synthesizes; server returns structured tree).
+  Dispatch in `mcp_server._invoke_wiki_graph()` plumbs through
+  `--seed`, `--depth`, `--format`.
+
+### Smoke tests T-graph-1..4 (Tests 47-50)
+
+Builds on the v2.12.0 Phase 3 fixture (F017 supersedes F015, refines
+F011, supersedes kata://peer-z/F100). After Phase 3 ran, F015 has
+`tier_override: archived` and `spec_superseded_by:` populated, so
+the lineage view sees a real propagated state.
+
+- **T-graph-1**: text format. F017 tree root, supersedes/refines/
+  federated outbound, ASCII rendered; `supersedes→` arrow + tier
+  labels visible.
+- **T-graph-2**: json format. Nested tree dict; F015 child's tier
+  is `archived` (post-Phase-3 state reflected through to lineage
+  view).
+- **T-graph-3**: mermaid format. `graph LR` DSL header, `-->|supersedes|`
+  / `-->|refines|` edge labels, `EXT_*` nodes for federated
+  `kata://peer-z/...` URI.
+- **T-graph-4 (bonus)**: inbound walk. Query lineage starting from
+  F015 — F017 must appear as `kind: supersedes` inbound source
+  (proves the reverse scan works).
+
+### Refactor
+
+- Moved spec-history helpers (`_load_reverse_index`,
+  `_build_spec_history_tree`, `_render_spec_history_text`,
+  `_render_spec_history_mermaid`) **above** the `if __name__ ==
+  "__main__"` block. Python's top-level statement order matters: the
+  `if __name__` block ran before bottom-of-file helpers were bound,
+  causing `NameError: '_load_reverse_index' is not defined`. Idiom
+  fix: helpers go above the entry-point guard.
+- Added `import re` (used by mermaid node-id sanitizer).
+
+### Migration
+
+Drop-in. No schema changes. No config changes. To use:
+
+```bash
+/kata:wiki-graph --mode spec-history --seed decisions/F017-new.md
+# default: ASCII tree to terminal
+
+/kata:wiki-graph --mode spec-history --seed F017-new --format mermaid
+# Mermaid DSL for embedding in markdown / Obsidian
+
+# Through federation: a peer kata can be asked for its lineage tree
+# via mcp__<peer>__wiki-graph(mode=spec-history, seed=..., format=json)
+```
+
+### v1.13 SHM status: COMPLETE
+
+| Phase | Version | Status |
+|---|---|---|
+| 0 — advisory preflight | v2.2.0 | ✓ |
+| 1 — external_sources (removed) | v2.3.0 / v2.5.0 | removed (see ADR) |
+| 2 — enforcement gate | v2.4.0 | ✓ |
+| 3 — auto-propagation | v2.12.0 | ✓ |
+| 4 — lineage view | v2.13.0 | ✓ (this commit) |
+
+Originally planned: 4 phases. Shipped: 3 phases (Phase 1 removed +
+ADR documents why). PRD-v1.13 has been the design backbone for ~25%
+of the cooldown's net code output.
+
+### Validation
+
+All 50 smoke tests pass (46 prior + 4 new T-graph-1..4 with
+sub-assertions). Pre-commit hook clean.
+
+---
+
 ## [2.12.0] — 2026-05-19 — v1.13 SHM Phase 3 (auto-propagation)
 
 Closes the supersede-loop. When a newly-ingested spec declares

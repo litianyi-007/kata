@@ -310,10 +310,12 @@ WIKI_GRAPH_TOOL = {
     "description": (
         "Query the kata wiki as a graph without maintaining a graph DB. "
         "Modes: neighbors / shortest-path / hubs / orphans / cluster / "
-        "stats. Each call scans .md files fresh and computes on the fly. "
-        "Defaults to active-tier pages when memory tiers are enabled. "
-        "Read-only — write operations like wiki-dream --apply are NOT "
-        "exposed across the MCP boundary."
+        "stats / spec-history. Each call scans .md files fresh and "
+        "computes on the fly. Defaults to active-tier pages when memory "
+        "tiers are enabled. Read-only — write operations like "
+        "wiki-dream --apply are NOT exposed across the MCP boundary. "
+        "v2.13.0+: spec-history mode renders v1.13 SHM lineage tree "
+        "(supersedes / refines chains) in text / json / mermaid."
     ),
     "inputSchema": {
         "type": "object",
@@ -321,7 +323,7 @@ WIKI_GRAPH_TOOL = {
             "mode": {
                 "type": "string",
                 "enum": ["neighbors", "shortest-path", "hubs", "orphans",
-                         "cluster", "stats"],
+                         "cluster", "stats", "spec-history"],
                 "description": "Query mode. Required."
             },
             "seed": {
@@ -355,6 +357,14 @@ WIKI_GRAPH_TOOL = {
                 "type": "string",
                 "enum": ["active", "archived", "frozen", "all"],
                 "description": "Memory-tier filter. Default: active."
+            },
+            "format": {
+                "type": "string",
+                "enum": ["text", "json", "mermaid"],
+                "description": "Output format for `spec-history` mode "
+                               "(v2.13.0+). text = ASCII tree (default); "
+                               "json = nested dict; mermaid = graph DSL for "
+                               "markdown / Obsidian embedding."
             }
         },
         "required": ["mode"]
@@ -368,7 +378,7 @@ def _invoke_wiki_graph(state: ServerState, arguments: dict) -> dict:
     if not mode or not isinstance(mode, str):
         raise ValueError("'mode' is required and must be a string")
     valid_modes = {"neighbors", "shortest-path", "hubs", "orphans",
-                   "cluster", "stats"}
+                   "cluster", "stats", "spec-history"}
     if mode not in valid_modes:
         raise ValueError(f"unknown mode {mode!r}; expected one of {sorted(valid_modes)}")
 
@@ -396,6 +406,21 @@ def _invoke_wiki_graph(state: ServerState, arguments: dict) -> dict:
         if not tag:
             raise ValueError("'tag' is required for mode=cluster")
         argv += ["--tag", str(tag)]
+    elif mode == "spec-history":
+        # Phase 4 (v2.13.0+) — supersession / refinement lineage tree
+        seed = arguments.get("seed")
+        if not seed:
+            raise ValueError("'seed' is required for mode=spec-history")
+        argv += ["--seed", str(seed)]
+        if arguments.get("depth") is not None:
+            argv += ["--depth", str(int(arguments["depth"]))]
+        fmt = arguments.get("format") or "text"
+        if fmt not in ("text", "json", "mermaid"):
+            raise ValueError(
+                f"'format' must be text|json|mermaid for spec-history; "
+                f"got {fmt!r}"
+            )
+        argv += ["--format", fmt]
     # hubs / orphans / stats take no mode-specific required args
 
     if arguments.get("limit") is not None:

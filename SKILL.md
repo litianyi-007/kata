@@ -1,7 +1,7 @@
 ---
 name: kata
-description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 17 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server / federate). v1.11 session-ingest MVP. **v1.12 cross-wiki federation complete (Phase 0+1+2+3)**: kata is both MCP server + client. **v1.13 SHM Phase 0+2+3 complete**: advisory preflight + enforcement gate + auto-propagation (banner / reverse-link / tier flip; kata:// targets write to local reverse-index; dreamer skips superseded pages — closes v1.6 Week 1 channel mismatch). Phase 4 (lineage view) is the only remaining slice."
-version: 2.12.0
+description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 17 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server / federate). v1.11 session-ingest MVP. **v1.12 cross-wiki federation complete**. **v1.13 SHM complete (Phase 0+2+3+4)**: advisory preflight + enforcement gate + auto-propagation + `wiki-graph --mode spec-history` lineage view (text / json / mermaid; cross-wiki kata:// supersedes shown as federated leaves; reads .spec-reverse-index.yaml)."
+version: 2.13.0
 author: surebeli
 license: MIT
 ---

@@ -3713,6 +3713,113 @@ print(json.dumps({{
     print("  ok  T-prop-5: dreamer skips spec_superseded_by-marked pages "
           "(v1.6 dogfood channel-mismatch finding closed)")
 
+    print("\nTest 47-49: v1.13 Phase 4 — spec-history lineage view (T-graph-1..3)")
+    # Reuse the Phase 3 fixture wiki (prop_wiki) — F017 supersedes F015,
+    # refines F011, supersedes kata://peer-z/F100 (cross-wiki). After
+    # Phase 3 ran, F015 has spec_superseded_by → F017. Now ask for
+    # spec-history starting at F017 and at F015.
+    # prop_wiki already has the .spec-reverse-index.yaml from T-prop-3
+
+    # T-graph-1: text format
+    hist_text = run([
+        str(SCRIPTS / "graph_query.py"),
+        "--wiki", str(prop_wiki),
+        "--mode", "spec-history",
+        "--seed", "decisions/F017-new-auth.md",
+        "--format", "text",
+    ])
+    assert_eq("T-graph-1: mode is spec-history", hist_text["mode"], "spec-history")
+    assert_eq("T-graph-1: format is text", hist_text["format"], "text")
+    tree = hist_text["tree"]
+    assert tree["path"] == "decisions/F017-new-auth.md", \
+        f"tree root path; got {tree.get('path')}"
+    outbound_kinds = {ob["kind"] for ob in tree["outbound"]}
+    assert "supersedes" in outbound_kinds, \
+        f"F017 must have supersedes outbound; got {outbound_kinds}"
+    assert "refines" in outbound_kinds, \
+        f"F017 must have refines outbound; got {outbound_kinds}"
+    # Federated kata:// must appear as federated=true
+    federated = [ob for ob in tree["outbound"] if ob.get("federated")]
+    assert federated, \
+        f"F017 must have at least one kata:// federated outbound; got {tree['outbound']}"
+    assert federated[0]["target_uri"].startswith("kata://peer-z/"), \
+        f"federated target should start with kata://peer-z/; got {federated[0]}"
+    # Text rendering includes expected substrings
+    text_out = hist_text["text"]
+    assert "F017 New Auth Design" in text_out or "F017-new-auth" in text_out, \
+        f"text rendering should name F017; got snippet: {text_out[:200]}"
+    assert "supersedes→" in text_out, \
+        "text format should use supersedes→ arrow notation"
+    assert "kata://peer-z/" in text_out, \
+        "federated URI should appear in text output"
+    print("  ok  T-graph-1: spec-history text format — F017 root, "
+          "supersedes/refines/federated outbound, ASCII tree rendered")
+
+    # T-graph-2: json format
+    hist_json = run([
+        str(SCRIPTS / "graph_query.py"),
+        "--wiki", str(prop_wiki),
+        "--mode", "spec-history",
+        "--seed", "decisions/F017-new-auth.md",
+        "--format", "json",
+    ])
+    assert_eq("T-graph-2: format is json", hist_json["format"], "json")
+    tree2 = hist_json["tree"]
+    # F015 child should appear in outbound with its own outbound list (depth recursion)
+    f015_branch = next((ob for ob in tree2["outbound"]
+                        if not ob.get("federated")
+                        and ob.get("target", "").endswith("F015-old-auth.md")),
+                       None)
+    assert f015_branch is not None, \
+        f"F015 must be in F017's outbound; got {tree2['outbound']}"
+    assert f015_branch["target_node"]["tier"] == "archived", \
+        f"F015 should be archived after Phase 3 ran (tier_override); " \
+        f"got tier={f015_branch['target_node']['tier']}"
+    print("  ok  T-graph-2: spec-history json format — nested tree with "
+          "target_node tier reflects post-Phase-3 archived state")
+
+    # T-graph-3: mermaid format
+    hist_mermaid = run([
+        str(SCRIPTS / "graph_query.py"),
+        "--wiki", str(prop_wiki),
+        "--mode", "spec-history",
+        "--seed", "decisions/F017-new-auth.md",
+        "--format", "mermaid",
+    ])
+    assert_eq("T-graph-3: format is mermaid", hist_mermaid["format"], "mermaid")
+    mermaid = hist_mermaid["mermaid"]
+    assert mermaid.startswith("graph LR"), \
+        f"mermaid output should start with 'graph LR'; got: {mermaid[:50]}"
+    assert "-->|supersedes|" in mermaid, \
+        f"mermaid should encode supersedes edge label; got: {mermaid[:300]}"
+    assert "-->|refines|" in mermaid, \
+        f"mermaid should encode refines edge label; got: {mermaid[:300]}"
+    # Federated node uses (("...")) syntax
+    assert 'EXT_' in mermaid and 'kata://peer-z/' in mermaid, \
+        f"mermaid should have EXT_-prefixed federated node; got: {mermaid[:400]}"
+    print("  ok  T-graph-3: spec-history mermaid format — graph LR DSL "
+          "with edge labels (supersedes/refines) + EXT_ federated node")
+
+    # T-graph-4 (bonus): inbound — query from F015 should show F017 as inbound supersedes
+    hist_inbound = run([
+        str(SCRIPTS / "graph_query.py"),
+        "--wiki", str(prop_wiki),
+        "--mode", "spec-history",
+        "--seed", "decisions/F015-old-auth.md",
+        "--format", "json",
+    ])
+    f015_tree = hist_inbound["tree"]
+    inbound = f015_tree.get("inbound", [])
+    f017_inbound = next((i for i in inbound
+                         if i.get("source_path", "").endswith("F017-new-auth.md")),
+                        None)
+    assert f017_inbound is not None, \
+        f"F015's inbound must list F017 as superseder; got {inbound}"
+    assert_eq("T-graph-4: inbound kind = supersedes",
+              f017_inbound["kind"], "supersedes")
+    print("  ok  T-graph-4 (bonus): inbound walk — F015's spec-history "
+          "correctly lists F017 as supersedes-source")
+
     print("\nAll smoke tests passed.")
     return 0
 
