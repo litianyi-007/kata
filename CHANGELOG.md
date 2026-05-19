@@ -4,6 +4,129 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.10.0] — 2026-05-19 — v1.12 cross-wiki federation Phase 2 (federation client + kata:// URI)
+
+**The federation loop closes.** Phase 0+1 made each kata an MCP server.
+Phase 2 makes a kata an MCP client too: it can spawn peer kata servers
+registered in its `.federation.yaml`, fan out queries in parallel, and
+merge responses with provenance preserved as `kata://<peer>/<path>`
+URIs. v1.12 is now functionally complete (Phase 3 is integration with
+v1.13 spec preflight, not new federation primitives).
+
+### Added
+
+- **`plugin/scripts/federation_client.py`** (~600 lines) — stdlib-only:
+  - **`MCPClient`** class wrapping a single peer's stdio MCP server.
+    Reader thread + `queue.Queue` for timeout-bounded reads on Windows
+    (stdlib `select` can't time-bound pipe reads cross-platform). Strict
+    JSON-RPC 2.0 wire. Context-manager safe (`with MCPClient(peer) as c`).
+  - **`parse_kata_uri()`** / **`KataURI`** dataclass — parses
+    `kata://<name-or-uuid>/<path>`. Lenient (returns `valid=False`
+    rather than raising) so callers like `wiki-lint` can surface
+    unresolvable references rather than crash on them.
+  - **`resolve_kata_uri()`** — name-first lookup against registry; UUID
+    fallback when the identifier parses as UUIDv4 (PRD D2.2).
+  - **`load_federation_config()`** — reads `{wiki_path}/.federation.yaml`
+    (PRD D2.1 per-wiki). Lenient: missing file = no federation, malformed
+    YAML = empty registry.
+  - **`federate_search()`** — runs local `search_naive.py` + parallel
+    fan-out (`ThreadPoolExecutor`, max 8 concurrent peers) to enabled
+    peers. Per-peer timeout (5s default, PRD D2.4). On peer failure,
+    surfaces in `federation.peers_timed_out` / `peers_unreachable` with
+    reasons; local results always returned.
+  - **Provenance preservation**: federated results gain `source_wiki`
+    (peer's wiki_id), `source_wiki_name` (peer's registry name), `uri`
+    (`kata://<name>/<path>`). Local results gain `source_wiki: "self"`.
+    Merged + sorted by score; capped at `limit`.
+  - **`WikiIdMismatchError`** — raised when peer's `serverInfo.kata.wiki_id`
+    ≠ registry's `wiki_id` (PRD D1.5 identity check). Refused for the
+    session; surfaced in `peers_unreachable` with `reason: "wiki_id mismatch"`.
+  - **Three CLI subcommands**: `federate-search`, `list-peers`, `resolve-uri`.
+
+- **`plugin/skills/wiki-federate/SKILL.md`** — author-facing
+  documentation:
+  - Configuration: `.federation.yaml` schema with all fields explained
+  - Subcommand reference + JSON output shape
+  - 6-row failure-mode table (none fatal to local query)
+  - Safety contract (identity check, read-only, no transitive resolution,
+    no remote auth, privacy warning)
+  - kata:// URI scheme (name form for daily use, wiki_id form for
+    long-lived citations per PRD D2.2)
+  - **Windows path quoting note**: stdlib YAML subset treats bare
+    colons as mapping separators, so `C:/...` paths MUST be quoted
+    in `command:` arrays. Documented as a hard rule in the schema
+    example.
+
+- **Smoke tests T-fed-1..4** (Tests 35-38 in `run_smoke.py`):
+  - **T-fed-1**: 2-fixture federation end-to-end. Local + peer results
+    merge correctly; peer hits gain `source_wiki_name`, `kata://`
+    URI, and peer's wiki_id as `source_wiki`. `federation.peers_queried`
+    contains the peer name.
+  - **T-fed-2**: wiki_id mismatch — registry says X but peer reports Y.
+    Peer refused this session, listed in `peers_unreachable` with reason.
+    Local results still returned (no fatal error to user query).
+  - **T-fed-3**: `kata://` URI parser — name form, wiki_id-UUID form,
+    unresolvable URI all behave correctly. `resolved=false` is
+    non-fatal.
+  - **T-fed-4a**: `--no-federate` flag suppresses fan-out, returns
+    local-only with `local_only_fallback: true`.
+  - **T-fed-4b**: `list-peers` reports registry contents + yaml location.
+
+### Changed
+
+- Root `SKILL.md` description + plugin manifest: 16 → 17 skills
+  (`wiki-federate` joins); v1.12 phase status updated to "Phase 0+1+2
+  shipped".
+- Test fixture YAML quoting: `command:` array tokens are now quoted in
+  the smoke test setup (Windows drive colon would otherwise mis-parse).
+
+### Phase scope (what's in v2.10.0 vs deferred)
+
+| Slice | Status | When |
+|---|---|---|
+| MCP client (stdio) | ✓ v2.10.0 | now |
+| `kata://` URI parser + resolver | ✓ v2.10.0 | now |
+| `.federation.yaml` per-wiki registry | ✓ v2.10.0 | now |
+| Parallel fan-out + per-peer timeout | ✓ v2.10.0 | now |
+| `wiki_id` identity check at connect | ✓ v2.10.0 | now |
+| `wiki-federate` skill | ✓ v2.10.0 | now |
+| **Phase 3 — federated spec preflight** | Designed in PRD §Phase 3 | v2.11.0 |
+| SSE transport (cross-machine) | Deferred | v2.12+ |
+| Connection pooling | Deferred | when latency complaints surface |
+| Transitive resolution (A→B→C URIs) | Out of scope | PRD §Out of scope |
+
+### Validation
+
+All 38 smoke tests pass (34 prior + 4 new T-fed-1..4). Pre-commit hook
+clean. Manual: `federation_client.py list-peers` against a sample
+registry works, identity-mismatch path was exercised end-to-end during
+test setup.
+
+### Why no `wiki-query` skill integration in v2.10.0
+
+`wiki-query` is the natural caller, but its current implementation is
+SKILL-driven (agent reads SKILL.md and orchestrates search +
+synthesis). Wiring federation into wiki-query is **agent-orchestration
+work** — adding a "if `.federation.yaml` exists, call
+`federation_client.py federate-search` instead of `search_naive.py`
+directly" step to the wiki-query SKILL.md. That's a v2.10.x or v2.11.0
+follow-up (PRD §"Author workflow (where federation actually shows up)")
+to keep this commit focused on the script + skill primitives.
+
+### Migration
+
+Drop-in. Existing wikis without `.federation.yaml` behave exactly
+like pre-v1.12 (federation_client.py is opt-in). To enable
+federation:
+1. Identify trusted peer kata wikis (must have a stable `wiki_id` —
+   v1.8 sync writes one)
+2. Create `{wiki_path}/.federation.yaml` with the peer's name +
+   wiki_id + command (stdio command to spawn its mcp_server.py)
+3. Validate via `wiki-federate peers` then `wiki-federate search`
+4. Quote every command token (Windows colon → YAML mapping mishap)
+
+---
+
 ## [2.9.0] — 2026-05-19 — v1.12 cross-wiki federation Phase 1 (MCP tool surface expansion)
 
 **Second batch of MCP tools land.** Kata's MCP server now exposes 3

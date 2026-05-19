@@ -3029,6 +3029,202 @@ exit 0
     assert server.returncode == 0, \
         f"Phase 1 server should exit 0 after EOF; got {server.returncode}"
 
+    print("\nTest 35-38: v1.12 Phase 2 federation client (T-fed-1..4)")
+    # Build two synthetic kata wikis (A + B) and a .federation.yaml in A
+    # pointing at B's MCP server. Then federate_search runs against A and
+    # asserts B's content shows up in merged results with provenance.
+    fed_wiki_a = FIXTURE.parent / "_fed_wiki_a"
+    fed_wiki_b = FIXTURE.parent / "_fed_wiki_b"
+    for d in (fed_wiki_a, fed_wiki_b):
+        if d.exists():
+            _windows_safe_rmtree(d)
+    for d in (fed_wiki_a, fed_wiki_b):
+        (d / "entities").mkdir(parents=True)
+        (d / "log.md").write_text("# Log\n", encoding="utf-8")
+
+    (fed_wiki_a / "SCHEMA.md").write_text(
+        "## Identity\n\n```yaml\nwiki_id: cccccccc-1111-4222-8333-444444444444\n```\n\n"
+        "## Domain\nfederation-A\n\n"
+        "## Categories\n\n```yaml\ncategories:\n  - name: entities\n    purpose: A\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 365\n  archived_days: 730\n"
+        "  driving_field: published_at\n```\n",
+        encoding="utf-8")
+    (fed_wiki_b / "SCHEMA.md").write_text(
+        "## Identity\n\n```yaml\nwiki_id: dddddddd-5555-4666-8777-888888888888\n```\n\n"
+        "## Domain\nfederation-B\n\n"
+        "## Categories\n\n```yaml\ncategories:\n  - name: entities\n    purpose: B\n```\n\n"
+        "## Memory tiers\n\n```yaml\nmemory_tiers:\n  enabled: true\n"
+        "  active_days: 365\n  archived_days: 730\n"
+        "  driving_field: published_at\n```\n",
+        encoding="utf-8")
+    (fed_wiki_a / "index.md").write_text("# Index A\n", encoding="utf-8")
+    (fed_wiki_b / "index.md").write_text("# Index B\n", encoding="utf-8")
+
+    # A has a page about "attention" topic
+    (fed_wiki_a / "entities" / "attention-local.md").write_text(
+        "---\ntitle: Attention (local A)\ntype: entities\ntags: [attention, ai]\n"
+        "published_at: 2026-05-10\n---\n\nA's local attention notes.\n",
+        encoding="utf-8")
+    # B has a different page about same topic
+    (fed_wiki_b / "entities" / "attention-shared.md").write_text(
+        "---\ntitle: Attention (peer B shared)\ntype: entities\n"
+        "tags: [attention, ai, transformer]\n"
+        "published_at: 2026-05-10\n---\n\nB's attention page.\n",
+        encoding="utf-8")
+    # B also has unrelated content
+    (fed_wiki_b / "entities" / "unrelated.md").write_text(
+        "---\ntitle: Unrelated\ntype: entities\ntags: [other]\n"
+        "published_at: 2026-05-10\n---\n\nUnrelated to attention.\n",
+        encoding="utf-8")
+
+    # Register B as a peer in A's .federation.yaml. Note: Windows paths
+    # contain `C:/...` colons. The stdlib YAML subset (_parse_yaml_block)
+    # treats bare colons as mapping separators, so Windows paths MUST be
+    # quoted. This is documented in the federation.yaml schema example in
+    # the wiki-federate SKILL.md.
+    py_exe = sys.executable.replace(chr(92), "/")
+    mcp_py = str(SCRIPTS / "mcp_server.py").replace(chr(92), "/")
+    wiki_b_path = str(fed_wiki_b).replace(chr(92), "/")
+    fed_yaml = (
+        f"peers:\n"
+        f"  - name: peer-b\n"
+        f"    wiki_id: dddddddd-5555-4666-8777-888888888888\n"
+        f"    endpoint: stdio\n"
+        f"    command:\n"
+        f"      - \"{py_exe}\"\n"
+        f"      - \"{mcp_py}\"\n"
+        f"      - \"--wiki\"\n"
+        f"      - \"{wiki_b_path}\"\n"
+        f"    enabled: true\n"
+        f"    timeout_seconds: 15\n"
+    )
+    (fed_wiki_a / ".federation.yaml").write_text(fed_yaml, encoding="utf-8")
+
+    # T-fed-3 (kata:// URI parse — does NOT need a server, fast)
+    parse_envelope = run([
+        str(SCRIPTS / "federation_client.py"), "resolve-uri",
+        "--uri", "kata://peer-b/entities/attention-shared.md",
+        "--wiki", str(fed_wiki_a),
+    ])
+    assert_eq("T-fed-3a: URI parses valid", parse_envelope["valid"], True)
+    assert_eq("T-fed-3a: identifier_type=name", parse_envelope["identifier_type"], "name")
+    assert_eq("T-fed-3a: resolved against registry", parse_envelope["resolved"], True)
+    assert_eq("T-fed-3a: peer_wiki_id matches",
+              parse_envelope["peer_wiki_id"],
+              "dddddddd-5555-4666-8777-888888888888")
+
+    # T-fed-3b: wiki_id-form URI also resolves
+    parse_uuid = run([
+        str(SCRIPTS / "federation_client.py"), "resolve-uri",
+        "--uri", "kata://dddddddd-5555-4666-8777-888888888888/some/path.md",
+        "--wiki", str(fed_wiki_a),
+    ])
+    assert_eq("T-fed-3b: identifier_type=wiki_id",
+              parse_uuid["identifier_type"], "wiki_id")
+    assert_eq("T-fed-3b: resolved via UUID match",
+              parse_uuid["resolved"], True)
+
+    # T-fed-3c: unresolvable URI surfaced as resolved=false (no crash)
+    parse_missing = run([
+        str(SCRIPTS / "federation_client.py"), "resolve-uri",
+        "--uri", "kata://does-not-exist/foo.md",
+        "--wiki", str(fed_wiki_a),
+    ])
+    assert_eq("T-fed-3c: unresolvable peer → resolved=false",
+              parse_missing["resolved"], False)
+    print("  ok  T-fed-3: kata:// URI parse + resolve (name + UUID forms; "
+          "unresolvable surfaced non-fatally)")
+
+    # T-fed-1: federate-search end-to-end. Local + peer both return
+    # results; merged envelope has both with correct provenance.
+    fed = run([
+        str(SCRIPTS / "federation_client.py"), "federate-search",
+        "--wiki", str(fed_wiki_a),
+        "--query", "attention",
+        "--limit", "10",
+    ])
+    paths = [r.get("path") for r in fed["results"]]
+    assert "entities/attention-local.md" in paths, \
+        f"local result must be in merged set; got {paths}"
+
+    federated_paths = [r for r in fed["results"]
+                       if r.get("source_wiki_name") == "peer-b"]
+    assert federated_paths, \
+        f"peer-b result must be in merged set; full results: {fed['results']}"
+    peer_hit = federated_paths[0]
+    assert_eq("T-fed-1: peer URI uses kata://peer-b/ prefix",
+              peer_hit["uri"].startswith("kata://peer-b/"), True)
+    assert_eq("T-fed-1: peer source_wiki = peer's wiki_id",
+              peer_hit["source_wiki"],
+              "dddddddd-5555-4666-8777-888888888888")
+    assert "peer-b" in fed["federation"]["peers_queried"], \
+        f"federation.peers_queried must list peer-b; got {fed['federation']}"
+    assert fed["federation"]["local_only_fallback"] is False
+    print("  ok  T-fed-1: 2-wiki federation — local + peer merged + "
+          "source_wiki_name + kata:// URI + provenance correct")
+
+    # T-fed-4: --no-federate forces local-only
+    fed_local = run([
+        str(SCRIPTS / "federation_client.py"), "federate-search",
+        "--wiki", str(fed_wiki_a),
+        "--query", "attention",
+        "--no-federate",
+    ])
+    assert_eq("T-fed-4a: --no-federate → no peers queried",
+              fed_local["federation"]["peers_queried"], [])
+    assert_eq("T-fed-4a: --no-federate → local_only_fallback=true",
+              fed_local["federation"]["local_only_fallback"], True)
+    paths_local = [r.get("path") for r in fed_local["results"]]
+    assert all("kata://" not in p for p in paths_local), \
+        f"--no-federate results should be local-only; got {paths_local}"
+    print("  ok  T-fed-4a: --no-federate suppresses fan-out, local-only result")
+
+    # T-fed-2: wiki_id mismatch refuses peer
+    # Construct a second registry with peer-b's wiki_id deliberately wrong.
+    # Command paths must be quoted (Windows colon in YAML — see T-fed-1).
+    fed_yaml_mismatch = (
+        f"peers:\n"
+        f"  - name: peer-b-misconfig\n"
+        f"    wiki_id: 99999999-9999-4999-8999-999999999999\n"  # wrong on purpose
+        f"    endpoint: stdio\n"
+        f"    command:\n"
+        f"      - \"{py_exe}\"\n"
+        f"      - \"{mcp_py}\"\n"
+        f"      - \"--wiki\"\n"
+        f"      - \"{wiki_b_path}\"\n"
+        f"    enabled: true\n"
+        f"    timeout_seconds: 15\n"
+    )
+    (fed_wiki_a / ".federation.yaml").write_text(fed_yaml_mismatch, encoding="utf-8")
+    fed_mismatch = run([
+        str(SCRIPTS / "federation_client.py"), "federate-search",
+        "--wiki", str(fed_wiki_a),
+        "--query", "attention",
+    ])
+    unreachable = fed_mismatch["federation"]["peers_unreachable"]
+    assert any(u["name"] == "peer-b-misconfig" for u in unreachable), \
+        f"mismatch peer must be in peers_unreachable; got {unreachable}"
+    mismatch_entry = next(u for u in unreachable if u["name"] == "peer-b-misconfig")
+    assert "wiki_id mismatch" in mismatch_entry["reason"].lower() or \
+           "mismatch" in mismatch_entry["reason"].lower(), \
+        f"reason must explain wiki_id mismatch; got {mismatch_entry}"
+    # Local results still come back even though peer was refused
+    local_paths = [r.get("path") for r in fed_mismatch["results"]]
+    assert "entities/attention-local.md" in local_paths, \
+        "local search must still return results when peer refused"
+    print("  ok  T-fed-2: wiki_id mismatch refused peer (identity check), "
+          "local results unaffected")
+
+    # T-fed-4b: list-peers shows registry
+    peers_envelope = run([
+        str(SCRIPTS / "federation_client.py"), "list-peers",
+        "--wiki", str(fed_wiki_a),
+    ])
+    assert_eq("T-fed-4b: list-peers count", peers_envelope["peer_count"], 1)
+    assert peers_envelope["exists"], "federation.yaml exists check"
+    print("  ok  T-fed-4b: list-peers reports registered peer + yaml location")
+
     print("\nAll smoke tests passed.")
     return 0
 
