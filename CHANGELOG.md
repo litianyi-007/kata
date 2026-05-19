@@ -4,6 +4,80 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.14.0] — 2026-05-20 — wiki-session-ingest: incremental mode (default)
+
+`wiki-session-ingest` previously re-parsed the entire session JSONL on
+every invocation and overwrote the dump file. v2.14.0 makes re-invocation
+**incremental by default**: only messages with `idx > state.last_msg_idx`
+are rendered and appended to the existing dump.
+
+### Added
+
+- **Per-session state file** at `{wiki}/raw/sessions/.session-ingest-state.yaml`,
+  keyed by `session_id`. Each entry tracks `dump_path`, `last_msg_idx`,
+  `last_run_at`, `cli`, `session_file`. State ships through wiki-sync,
+  so multi-machine setups stay coherent.
+- **`--full` flag on `dump`** — forces a full reparse + overwrite. Reuses
+  the state-recorded dump path (filename stable across days). Output
+  carries `"forced_full": true`.
+- **`session_ingest.py state show` / `state forget` subcommands** —
+  inspect or reset incremental tracking. `forget` removes a session's
+  state entry so the next dump starts fresh (full write); does NOT
+  delete the existing dump file.
+- **Incremental section delimiter** in the dump body:
+  `<!-- kata:session-ingest INCREMENTAL run_at=… msg_start=… msg_end=… -->`
+  marks each appended block, so the dump remains human-readable across
+  many incremental runs.
+- **Frontmatter `incremental_runs:` array** — each entry records
+  `run_at`, `msg_idx_start`, `msg_idx_end`, `new_message_count`. The
+  initial full write also creates one entry. `--full` reset rewrites it
+  back to a single entry.
+
+### Changed
+
+- **Default mode is incremental.** First call: full write (creates state).
+  Same-session re-invoke: incremental. Same-session re-invoke with no
+  growth: no-op success with `"no_new_messages": true` — dump file is
+  byte-identical.
+- **Dump filename is stable across days for tracked sessions.** Previously
+  `{cli}-{today}-{slug}-{short-id}.md` recomputed `today` every call, so a
+  multi-day session would produce orphaned per-day files. With state, the
+  filename is recorded on the first dump and reused.
+- **JSONL parsers** now return `list[MessagePart]` (with stable `idx`)
+  instead of pre-joined `str`. Enables msg-idx slicing for incremental
+  dispatch. The rendered output is byte-identical to v2.13.1 for the
+  full-write case (same line spacing).
+- **MCP server version** auto-reads from `plugin.json` (introduced in
+  v2.13.1) — picks up the 2.14.0 bump without code change.
+
+### Tests
+
+- **T-session-inc-1** — first dump → mode=full, state file initialized,
+  `last_msg_idx` matches `message_count`.
+- **T-session-inc-2** — re-dump with no JSONL growth → mode=incremental,
+  `no_new_messages: true`, dump byte-identical (strict equality check).
+- **T-session-inc-3** — JSONL grows by 2 messages → incremental append.
+  Verifies: original body preserved, delimiter present, frontmatter
+  `message_count` bumped, `incremental_runs:` has 2 entries, state
+  `last_msg_idx` updated.
+- **T-session-inc-4** — `--full` flag reuses state-recorded path,
+  reparses from msg #1, resets `incremental_runs:` to a single entry,
+  removes all incremental delimiters.
+- **T-session-inc-5** (bonus) — `state forget` removes session entry;
+  next dump → mode=full again.
+
+### Notes
+
+- **LLM-dump path (`dump-llm`) is always full** — agent-supplied bodies
+  have no stable `msg_idx`. Each `dump-llm` call still overwrites.
+- **Cross-session sweep is still NOT supported.** v2.14.0 is incremental
+  *within* one session, not *across* sessions. A `--sweep` subcommand
+  that scans all session files for new ones since last sweep is on the
+  v1.15+ idea list, not in this release.
+- **State file ships through wiki-sync.** Multi-machine setups dumping
+  the same session_id will converge. If you don't want this, add
+  `raw/sessions/.session-ingest-state.yaml` to your wiki's `.gitignore`.
+
 ## [2.13.1] — 2026-05-19 — codex audit hardening (path traversal + Phase 3 PREVIEW)
 
 Response patch to Codex GPT-5.5 xhigh audit task-mpci827r-1prafp (verdict

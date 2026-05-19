@@ -2,7 +2,7 @@
 name: wiki-session-ingest
 description: "Ingest the active AI CLI session into the wiki: detect which CLI you're in (Claude Code / Codex CLI / Gemini / Copilot / OpenCode / Kimi / unknown), read the session transcript, write a raw session dump, extract knowledge-point candidates, multi-select with the user, and distill each into wiki pages via the existing wiki-ingest pipeline. v1.11 MVP. Captures the conversation-born knowledge that's normally lost when the user 'forgets to write it down.'"
 user-invocable: true
-argument-hint: "[--session-id <id>] [--session-file <path>] [--cli <name>] [--max-tool-output-lines N] [--auto-trigger]"
+argument-hint: "[--session-id <id>] [--session-file <path>] [--cli <name>] [--max-tool-output-lines N] [--full] [--auto-trigger]"
 ---
 
 # wiki-session-ingest
@@ -91,6 +91,7 @@ agent should sanity-check before proceeding).
 python {plugin_root}/scripts/session_ingest.py dump \
     --wiki {wiki_path} \
     --max-tool-output-lines 30
+    # add --full to force a full reparse + overwrite (default is incremental)
 ```
 
 The script parses the JSONL, transforms it into readable markdown (with
@@ -102,8 +103,56 @@ and writes to:
 {wiki_path}/raw/sessions/{cli}-{date}-{cwd-slug}-{short-id}.md
 ```
 
-Output JSON includes `dump_path`, `event_count`, `message_count`,
-`session_start`, `session_end`, `size_bytes`.
+Output JSON includes `dump_path`, `mode` (`full` or `incremental`),
+`event_count`, `message_count`, `session_start`, `session_end`,
+`size_bytes`. Incremental runs additionally include `msg_idx_start`,
+`msg_idx_end`, and `new_message_count`.
+
+### Incremental vs full (v2.14.0+)
+
+**Default is incremental.** State is tracked at
+`{wiki_path}/raw/sessions/.session-ingest-state.yaml`, keyed by
+`session_id` (UUID — globally unique across machines, ships through
+wiki-sync). For each session it records the last `msg_idx` written and
+the dump file path:
+
+- **First dump for a session**: state has no entry → script writes a
+  full dump using `{cli}-{today}-{slug}-{short-id}.md` and initializes
+  the state entry. Output `"mode": "full"`.
+- **Re-dump with no new messages**: state matches current `message_count`
+  → no-op, dump file byte-identical. Output `"mode": "incremental",
+  "no_new_messages": true`.
+- **Re-dump with growth**: only messages with `idx > last_msg_idx` are
+  rendered and appended to the **existing** dump (path reused from
+  state — filename stable across days). A delimiter
+  `<!-- kata:session-ingest INCREMENTAL run_at=… msg_start=… msg_end=… -->`
+  marks the appended section; frontmatter `message_count` is bumped and
+  a new entry is appended to `incremental_runs:`. Output `"mode":
+  "incremental"`, `msg_idx_start`, `msg_idx_end`, `new_message_count`.
+- **`--full` flag**: ignore state's `last_msg_idx`, reparse from msg #1,
+  overwrite the dump (reusing the state-recorded path so the filename
+  doesn't change). Use this if the existing dump was corrupted, or if
+  you want a clean single-section dump after lots of incremental
+  appends. Output `"mode": "full"`, `"forced_full": true`.
+- **State stale** (state references a dump file that no longer exists):
+  script falls back to full write + logs `"stale_state_recovered":
+  true`.
+
+Inspect or reset state:
+
+```bash
+python {plugin_root}/scripts/session_ingest.py state show --wiki {wiki_path}
+python {plugin_root}/scripts/session_ingest.py state show --wiki {wiki_path} --session-id <id>
+python {plugin_root}/scripts/session_ingest.py state forget --wiki {wiki_path} --session-id <id>
+```
+
+`state forget` removes a session's entry so the next dump starts fresh
+as a full write. The existing dump file is **NOT** deleted by this
+operation — remove it manually if you want a truly clean re-ingest.
+
+**LLM-dump path (`dump-llm`) is always full.** Agent-supplied bodies
+have no stable msg_idx for incremental tracking; each `dump-llm` call
+overwrites.
 
 ### llm-dump path (Gemini / Copilot / OpenCode / Kimi / unknown)
 
@@ -369,7 +418,7 @@ contradictions worth user attention.}
 → kata:wiki-lint     (check for new orphans or stale cross-references)
 ```
 
-## Known limitations (v1.11 MVP)
+## Known limitations (v1.11 MVP + v2.14.0)
 
 - **JSONL adapters are Claude Code + Codex CLI only.** Other 4 CLIs go
   through the LLM-dump path; sentinel-env detection for them is
@@ -377,12 +426,17 @@ contradictions worth user attention.}
 - **No cross-CLI session merge.** If you're working on the same task in
   Claude Code and Codex side-by-side, each session ingests
   independently — no automatic correlation.
-- **No bulk historical re-ingest.** MVP targets the active session or
-  one explicit `--session-id`. Sweeping last-30-days of sessions is
-  deferred.
+- **No bulk historical re-ingest / sweep.** Skill still targets one
+  active session per call (or one explicit `--session-id`). Cross-session
+  sweep ("ingest every session modified in the last 7 days") is a
+  separate feature on the v1.15+ idea list. The v2.14.0 incremental
+  improvement is **within** a single session, not across sessions.
 - **No secret scrubber.** A `--scrub-secrets` flag is on the v1.12
   candidate list; for now, eyeball the raw dump before sync.
 - **No real-time streaming.** Skill is one-shot per invocation.
+- **Incremental tracking is session-id based.** LLM-dump CLIs without a
+  stable session id fall back to `path:<session_file>` keying, which
+  breaks if the file moves. JSONL CLIs are unaffected.
 
 ## See also
 

@@ -2645,6 +2645,164 @@ exit 0
     assert_eq("config get value after set", cfg_get["value"], True)
     print("  ok  config show/set/get roundtrip via ~/.kata/session-ingest.yaml")
 
+    print("\nTest 25b: v2.14.0 session-ingest — incremental mode (T-session-inc-1..4)")
+    # Reuse sess_wiki from Test 23, but use a fresh session id + fresh jsonl
+    # so we can grow the jsonl across multiple dump calls.
+    inc_wiki = FIXTURE.parent / "_session_inc_wiki"
+    if inc_wiki.exists():
+        _windows_safe_rmtree(inc_wiki)
+    inc_wiki.mkdir(parents=True)
+    (inc_wiki / "raw" / "sessions").mkdir(parents=True)
+    (inc_wiki / "SCHEMA.md").write_text(
+        "## Domain\nincremental fixture\n", encoding="utf-8")
+    inc_sid = "aaa11111-bbbb-4ccc-8ddd-incrementaltest"
+    inc_src_dir = FIXTURE.parent / "_session_inc_src"
+    if inc_src_dir.exists():
+        _windows_safe_rmtree(inc_src_dir)
+    inc_src_dir.mkdir(parents=True)
+    inc_jsonl = inc_src_dir / "session.jsonl"
+
+    def _claude_event(role: str, text: str, ts: str) -> dict:
+        if role == "user":
+            return {"type": "user", "role": "user", "timestamp": ts,
+                    "message": {"role": "user", "content": text}}
+        return {"type": "assistant", "role": "assistant", "timestamp": ts,
+                "message": {"role": "assistant", "content": text}}
+
+    # First batch: 3 messages
+    events_v1 = [
+        _claude_event("user", "first question", "2026-05-19T10:00:00Z"),
+        _claude_event("assistant", "first answer", "2026-05-19T10:00:30Z"),
+        _claude_event("user", "follow-up", "2026-05-19T10:01:00Z"),
+    ]
+    with inc_jsonl.open("w", encoding="utf-8") as f:
+        for ev in events_v1:
+            f.write(json.dumps(ev) + "\n")
+
+    # T-session-inc-1: first dump (no state) → full write, message_count=3,
+    # state file created
+    inc1 = run([str(SCRIPTS / "session_ingest.py"), "dump",
+                "--wiki", str(inc_wiki),
+                "--cli", "claude-code",
+                "--session-file", str(inc_jsonl),
+                "--session-id", inc_sid,
+                "--cwd", "/synthetic/test/inc"])
+    assert_eq("T-session-inc-1: mode", inc1["mode"], "full")
+    assert_eq("T-session-inc-1: message_count", inc1["message_count"], 3)
+    inc_dump = Path(inc1["dump_path"])
+    assert inc_dump.is_file(), f"first dump missing: {inc_dump}"
+    state_path = inc_wiki / "raw" / "sessions" / ".session-ingest-state.yaml"
+    assert state_path.is_file(), "state file should be created on first dump"
+    state_text = state_path.read_text(encoding="utf-8")
+    assert inc_sid in state_text, f"state should index by session_id; got {state_text}"
+    assert "last_msg_idx: 3" in state_text, \
+        f"state.last_msg_idx should be 3 after first run; got {state_text}"
+    print("  ok  T-session-inc-1: first dump → mode=full, msg_count=3, "
+          "state file initialized")
+
+    # T-session-inc-2: re-dump with NO jsonl growth → mode=incremental,
+    # no_new_messages=True, dump file unchanged
+    dump_before = inc_dump.read_text(encoding="utf-8")
+    mtime_before = inc_dump.stat().st_mtime_ns
+    inc2 = run([str(SCRIPTS / "session_ingest.py"), "dump",
+                "--wiki", str(inc_wiki),
+                "--cli", "claude-code",
+                "--session-file", str(inc_jsonl),
+                "--session-id", inc_sid,
+                "--cwd", "/synthetic/test/inc"])
+    assert_eq("T-session-inc-2: mode", inc2["mode"], "incremental")
+    assert_eq("T-session-inc-2: no_new_messages", inc2.get("no_new_messages"), True)
+    dump_after = inc_dump.read_text(encoding="utf-8")
+    assert dump_after == dump_before, \
+        "no-new-messages run must leave dump byte-identical"
+    print("  ok  T-session-inc-2: no-growth re-run → no_new_messages=True, "
+          "dump byte-identical")
+
+    # T-session-inc-3: jsonl grows by 2 messages → mode=incremental,
+    # new section appended, state updated
+    events_v2_delta = [
+        _claude_event("assistant", "follow-up answer", "2026-05-19T10:01:30Z"),
+        _claude_event("user", "third question", "2026-05-19T10:02:00Z"),
+    ]
+    with inc_jsonl.open("a", encoding="utf-8") as f:
+        for ev in events_v2_delta:
+            f.write(json.dumps(ev) + "\n")
+
+    inc3 = run([str(SCRIPTS / "session_ingest.py"), "dump",
+                "--wiki", str(inc_wiki),
+                "--cli", "claude-code",
+                "--session-file", str(inc_jsonl),
+                "--session-id", inc_sid,
+                "--cwd", "/synthetic/test/inc"])
+    assert_eq("T-session-inc-3: mode", inc3["mode"], "incremental")
+    assert_eq("T-session-inc-3: message_count", inc3["message_count"], 5)
+    assert_eq("T-session-inc-3: msg_idx_start", inc3["msg_idx_start"], 4)
+    assert_eq("T-session-inc-3: msg_idx_end", inc3["msg_idx_end"], 5)
+    assert_eq("T-session-inc-3: new_message_count", inc3["new_message_count"], 2)
+    dump_v3 = inc_dump.read_text(encoding="utf-8")
+    assert "first question" in dump_v3, \
+        "incremental must preserve original message 1"
+    assert "follow-up answer" in dump_v3, \
+        "incremental must include newly-appended message 4"
+    assert "third question" in dump_v3, \
+        "incremental must include newly-appended message 5"
+    # Section delimiter visible
+    assert "kata:session-ingest INCREMENTAL" in dump_v3, \
+        "incremental delimiter must mark the appended section"
+    # Frontmatter updated
+    assert "message_count: 5" in dump_v3, \
+        "frontmatter message_count should reflect total after append"
+    # incremental_runs has two entries
+    assert dump_v3.count("- run_at:") == 2, \
+        f"incremental_runs should have 2 entries (initial + delta); got " \
+        f"{dump_v3.count('- run_at:')}"
+    # State updated
+    state_text3 = state_path.read_text(encoding="utf-8")
+    assert "last_msg_idx: 5" in state_text3, \
+        f"state.last_msg_idx should bump to 5; got {state_text3}"
+    print("  ok  T-session-inc-3: jsonl grew by 2 msgs → only delta appended; "
+          "frontmatter + state updated; original body preserved")
+
+    # T-session-inc-4: --full on the same session → reparse from msg 1,
+    # overwrite dump (reusing same path from state), state msg_idx reset to 5
+    inc4 = run([str(SCRIPTS / "session_ingest.py"), "dump",
+                "--wiki", str(inc_wiki),
+                "--cli", "claude-code",
+                "--session-file", str(inc_jsonl),
+                "--session-id", inc_sid,
+                "--cwd", "/synthetic/test/inc",
+                "--full"])
+    assert_eq("T-session-inc-4: mode", inc4["mode"], "full")
+    assert_eq("T-session-inc-4: forced_full", inc4.get("forced_full"), True)
+    assert_eq("T-session-inc-4: message_count", inc4["message_count"], 5)
+    # Same dump path reused (state-guided), not a new file
+    assert inc4["dump_path"] == str(inc_dump), \
+        f"--full should overwrite existing dump path; got {inc4['dump_path']}"
+    dump_v4 = inc_dump.read_text(encoding="utf-8")
+    # Should be a fresh single-section dump — only ONE run_at entry
+    assert dump_v4.count("- run_at:") == 1, \
+        f"--full should reset incremental_runs to a single entry; got " \
+        f"{dump_v4.count('- run_at:')}"
+    assert "kata:session-ingest INCREMENTAL" not in dump_v4, \
+        "--full overwrite should leave NO incremental delimiter (single contiguous body)"
+    print("  ok  T-session-inc-4: --full reuses same dump path, reparses from "
+          "msg #1, resets incremental_runs to single entry")
+
+    # T-session-inc-5 (bonus): `state forget` resets entry so next dump is full
+    inc5_forget = run([str(SCRIPTS / "session_ingest.py"), "state", "forget",
+                       "--wiki", str(inc_wiki),
+                       "--session-id", inc_sid])
+    assert_eq("T-session-inc-5: forgot key", inc5_forget["forgot"], inc_sid)
+    inc5 = run([str(SCRIPTS / "session_ingest.py"), "dump",
+                "--wiki", str(inc_wiki),
+                "--cli", "claude-code",
+                "--session-file", str(inc_jsonl),
+                "--session-id", inc_sid,
+                "--cwd", "/synthetic/test/inc"])
+    assert_eq("T-session-inc-5: post-forget mode", inc5["mode"], "full")
+    print("  ok  T-session-inc-5 (bonus): state forget + redump → full again, "
+          "session entry rebuilt fresh")
+
     print("\nTest 26-29: v1.12 Phase 0 — MCP server (T-mcp-1..4)")
     # Build a tiny fixture wiki with SCHEMA.md (wiki_id required) + one page
     mcp_wiki = FIXTURE.parent / "_mcp_phase0_wiki"
