@@ -441,6 +441,118 @@ def _query_peer_search(peer: dict, query: str, limit: int,
     return {"results": []}
 
 
+def _query_peer_spec_preflight(peer: dict, new_spec_path: str, limit: int,
+                                include_archived: bool,
+                                include_frozen: bool) -> dict:
+    """Connect to a peer, call its wiki-spec-preflight tool, return the
+    structuredContent envelope (or parse text-block fallback)."""
+    with MCPClient(peer) as client:
+        args: dict = {
+            "new_spec_path": new_spec_path,
+            "limit": int(limit),
+            "include_archived": bool(include_archived),
+            "include_frozen": bool(include_frozen),
+        }
+        result = client.call_tool("wiki-spec-preflight", args)
+    if "structuredContent" in result:
+        return result["structuredContent"]
+    content = result.get("content") or []
+    if content and isinstance(content, list) and content[0].get("type") == "text":
+        try:
+            return json.loads(content[0]["text"])
+        except json.JSONDecodeError:
+            return {"candidates": []}
+    return {"candidates": []}
+
+
+def federate_spec_preflight(wiki_root: Path, new_spec_path: str,
+                             peers: list[dict], limit: int = 10,
+                             include_archived: bool = False,
+                             include_frozen: bool = False,
+                             peer_filter: set[str] | None = None) -> dict:
+    """Parallel fan-out wiki-spec-preflight to enabled peers. Returns
+    a federation envelope with:
+    - `peer_candidates`: list of candidate dicts, each annotated with
+      `source_wiki`, `source_wiki_name`, `uri` (`kata://<name>/<path>`)
+    - `federation`: diagnostic block (peers_queried / peers_timed_out
+      / peers_unreachable / local_only_fallback)
+
+    Unlike federate_search, this does NOT run a local preflight —
+    caller (spec_preflight.py) does that itself, then merges with our
+    peer_candidates. Separation of concerns lets spec_preflight retain
+    its enforcement gate logic locally.
+    """
+    diagnostic = {
+        "peers_queried": [],
+        "peers_timed_out": [],
+        "peers_unreachable": [],
+        "local_only_fallback": False,
+    }
+
+    enabled_peers = []
+    for p in peers:
+        if not p.get("enabled", True):
+            continue
+        if peer_filter and p.get("name") not in peer_filter:
+            continue
+        if not p.get("wiki_id"):
+            diagnostic["peers_unreachable"].append({
+                "name": p.get("name", "<unnamed>"),
+                "reason": "registry entry missing wiki_id — refused",
+            })
+            continue
+        enabled_peers.append(p)
+
+    if not enabled_peers:
+        diagnostic["local_only_fallback"] = True
+        return {"peer_candidates": [], "federation": diagnostic}
+
+    peer_candidates: list[dict] = []
+    with ThreadPoolExecutor(
+        max_workers=min(MAX_PARALLEL_PEERS, len(enabled_peers)),
+        thread_name_prefix="federate-pf",
+    ) as pool:
+        futures = {
+            pool.submit(_query_peer_spec_preflight, peer, new_spec_path,
+                        limit, include_archived, include_frozen): peer
+            for peer in enabled_peers
+        }
+        for future in as_completed(futures):
+            peer = futures[future]
+            name = peer.get("name", "<unnamed>")
+            try:
+                envelope = future.result()
+            except TimeoutError as e:
+                diagnostic["peers_timed_out"].append({
+                    "name": name,
+                    "timeout_seconds": peer.get("timeout_seconds",
+                                                DEFAULT_PEER_TIMEOUT),
+                    "reason": str(e),
+                })
+                continue
+            except WikiIdMismatchError as e:
+                diagnostic["peers_unreachable"].append({
+                    "name": name,
+                    "reason": f"wiki_id mismatch: {e}",
+                })
+                continue
+            except (RuntimeError, OSError, FileNotFoundError, Exception) as e:
+                diagnostic["peers_unreachable"].append({
+                    "name": name,
+                    "reason": f"{type(e).__name__}: {e}",
+                })
+                continue
+
+            for c in envelope.get("candidates", []):
+                c["source_wiki"] = peer.get("wiki_id")
+                c["source_wiki_name"] = name
+                c["uri"] = f"kata://{name}/{c.get('path', '')}"
+                peer_candidates.append(c)
+            diagnostic["peers_queried"].append(name)
+
+    return {"peer_candidates": peer_candidates, "federation": diagnostic}
+
+
 def federate_search(wiki_root: Path, query: str, peers: list[dict],
                     limit: int = 10, tier: str | None = "active",
                     peer_filter: set[str] | None = None) -> dict:

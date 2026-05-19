@@ -110,13 +110,30 @@ def _normalize_target(s: str) -> str:
 
 def _candidate_match_keys(candidate: dict) -> set[str]:
     """Return the set of normalized strings that should match a declared
-    target for this candidate. Includes both wiki-relative path and bare
-    stem so authors can use either form (or a [[wikilink]])."""
+    target for this candidate. Includes wiki-relative path, bare stem,
+    and (for federated candidates) the `kata://<name>/<path>` URI in
+    both name and wiki_id forms (PRD D2.2)."""
     keys: set[str] = set()
     full = candidate.get("path") or ""
     keys.add(_normalize_target(full))
     stem = full.split("/")[-1] if "/" in full else full
     keys.add(_normalize_target(stem))
+
+    # Phase 3 (v2.11.0): federated candidates carry kata:// URI + the
+    # peer's wiki_id. Authors may have declared targets in either form
+    # (PRD D2.2 name-first daily, wiki_id-form for long-lived).
+    uri = candidate.get("uri")
+    if uri:
+        keys.add(_normalize_target(uri))
+    peer_name = candidate.get("source_wiki_name")
+    peer_wiki_id = candidate.get("source_wiki")
+    if peer_name and full:
+        # Already covered by `uri` but defend against missing uri field.
+        keys.add(_normalize_target(f"kata://{peer_name}/{full}"))
+    if peer_wiki_id and peer_wiki_id != "self" and full:
+        # wiki_id form — long-lived citation form per PRD D2.2.
+        keys.add(_normalize_target(f"kata://{peer_wiki_id}/{full}"))
+
     keys.discard("")
     return keys
 
@@ -176,6 +193,15 @@ def main() -> int:
     p.add_argument("--enforce-mode", choices=["strict", "confirm"], default=None,
                    help="Override `spec_authoring.enforcement_mode` for this "
                         "run. strict=exit 2 on uncovered; confirm=exit 1.")
+    p.add_argument("--federate", action="store_true",
+                   help="Phase 3 (v2.11.0): also fan out to peer kata wikis "
+                        "listed in {wiki_path}/.federation.yaml, merge their "
+                        "preflight candidates into the ranked list with "
+                        "kata://<peer>/<path> URIs as provenance. Default "
+                        "off; opt-in per invocation.")
+    p.add_argument("--federate-peers", default=None,
+                   help="Comma-separated peer names to restrict the fan-out "
+                        "(default: all enabled peers in .federation.yaml).")
     args = p.parse_args()
 
     # Read the new spec file
@@ -323,8 +349,45 @@ def main() -> int:
             },
         })
 
+    # Annotate local candidates with source_wiki="self" so federation
+    # downstream can tell them apart cleanly from peer candidates.
+    for r in results:
+        r["source_wiki"] = "self"
+
+    # Phase 3 (v2.11.0): federated fan-out. When --federate is set and
+    # .federation.yaml exists, ask each enabled peer to run its own
+    # wiki-spec-preflight on this draft and merge their candidates.
+    federation_block: dict | None = None
+    if args.federate:
+        from federation_client import (  # noqa: PLC0415 — lazy import
+            load_federation_config, federate_spec_preflight,
+        )
+        peers = load_federation_config(root)
+        peer_filter = None
+        if args.federate_peers:
+            peer_filter = {
+                n.strip() for n in args.federate_peers.split(",") if n.strip()
+            }
+        fed_envelope = federate_spec_preflight(
+            wiki_root=root,
+            new_spec_path=str(new_spec_path),
+            peers=peers,
+            limit=args.limit,
+            include_archived=bool(args.include_archived or args.include_frozen),
+            include_frozen=bool(args.include_frozen),
+            peer_filter=peer_filter,
+        )
+        # Peer candidates get their tier label normalized so caller code
+        # that branches on `tier` doesn't have to know about federation.
+        # Use "federated" as the synthetic tier — keeps active/archived/
+        # frozen pure and lets `tier_breakdown` track federated count.
+        for c in fed_envelope["peer_candidates"]:
+            c.setdefault("tier", "federated")
+            results.append(c)
+        federation_block = fed_envelope["federation"]
+
     # Rank: highest score first; stable tiebreak by path
-    results.sort(key=lambda r: (-r["score"], r["path"]))
+    results.sort(key=lambda r: (-r["score"], r.get("path", "")))
 
     # Keep the unbounded set for Phase 2 enforcement — a low --limit
     # must not hide above-threshold candidates from the coverage check.
@@ -338,8 +401,18 @@ def main() -> int:
         t = tier_map[page.path]
         if t in tier_breakdown:
             tier_breakdown[t] += 1
+    # Federated candidates aren't in `candidates` (they came from peers,
+    # not from local discover_pages), so add their count to the breakdown
+    # separately. Track under a "federated" key (NOT "external" — that
+    # was the removed v1.13 Phase 1; "federated" means a peer kata wiki).
+    federated_count = sum(1 for r in full_results
+                          if r.get("source_wiki") not in (None, "self"))
+    if federated_count or args.federate:
+        tier_breakdown["federated"] = federated_count
 
     phase = 0
+    if args.federate:
+        phase = 3  # Phase 3 fan-out was active this run
 
     # Phase 2: enforcement check.
     # Active when --enforce is passed OR schema's
@@ -361,7 +434,12 @@ def main() -> int:
         )
         if mode not in ("strict", "confirm"):
             mode = "strict"
-        phase = 2
+        # phase = 2 represents enforcement-active. But if federation
+        # already set phase = 3 (the larger-numbered overlay), keep that
+        # — phase is reported as the highest-numbered active feature so
+        # callers can switch on it without losing info.
+        if phase < 2:
+            phase = 2
 
         declared = _parse_spec_relationships(new_fm)
         declared_normalized = {d["_normalized"] for d in declared if d["_normalized"]}
@@ -402,6 +480,11 @@ def main() -> int:
                     "type": u.get("type"),
                     "tier": u.get("tier"),
                     "score": u.get("score"),
+                    # Provenance — caller needs to know whether to chase
+                    # a missing declaration locally or via federation
+                    "source_wiki": u.get("source_wiki", "self"),
+                    "source_wiki_name": u.get("source_wiki_name"),
+                    "uri": u.get("uri"),
                 }
                 for u in uncovered
             ],
@@ -426,14 +509,17 @@ def main() -> int:
             "enforces relationship declaration for above-threshold candidates "
             "when --enforce is set or "
             "`spec_authoring.enforce_relationship_declaration` is true in "
-            "SCHEMA.md. Cross-source authoring uses wiki-import (bulk human "
-            "import) or v1.12 cross-wiki federation (kata-to-kata cooperation) "
-            "— preflight is kata-internal only by design."
+            "SCHEMA.md. Phase 3 (--federate) merges peer-kata candidates "
+            "into the ranked list; federated candidates appear with "
+            "kata://<peer>/<path> URIs and participate in the enforcement "
+            "coverage check just like local ones."
         ),
         "phase": phase,
     }
     if enforcement_block is not None:
         payload["enforcement"] = enforcement_block
+    if federation_block is not None:
+        payload["federation"] = federation_block
     emit(payload)
     return exit_code
 
