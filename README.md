@@ -19,6 +19,9 @@ claude /plugin install kata@kata
 git clone https://github.com/surebeli/kata ~/kata
 cd ~/kata && python scripts/install_codex_skills.py
 export KATA_HOME=~/kata
+
+# OR — GitHub Copilot CLI (v2.15.2+)
+copilot plugin install surebeli/kata
 ```
 
 Then in any project directory:
@@ -176,8 +179,8 @@ written down, so they don't compound.
 
 ## Installation
 
-kata ships as three parallel install paths — pick the one matching your
-LLM tooling. All paths give you the same 13 skills and the same wiki
+kata ships as four parallel install paths — pick the one matching your
+LLM tooling. All paths give you the same 18 skills and the same wiki
 filesystem layout.
 
 | Path | Tool | Install location | Scope |
@@ -185,6 +188,7 @@ filesystem layout.
 | A | Claude Code (recommended) | `~/.claude/plugins/` (managed by `claude /plugin install`) | Global |
 | B | Codex CLI | `~/.codex/skills/` + `~/kata/` (generated skills + env var) | Global |
 | C | Standalone | Pasted into LLM session as system prompt | Per-session |
+| D | GitHub Copilot CLI | `~/.config/github-copilot/copilot-cli/` (managed by `copilot plugin install`) | Global |
 
 All three install kata **once globally** (or once per session for C); the
 wiki content lives separately at `~/.llm-wiki/<project>/` regardless of
@@ -327,6 +331,46 @@ schema and produce the same wiki layout as Path A or B.
   Path C wikis can still git pull/push manually but skip the custom
   driver auto-merge
 
+### Path D — GitHub Copilot CLI (v2.15.2+)
+
+```bash
+# Install directly from the GitHub repo
+copilot plugin install surebeli/kata
+
+# OR from a local clone
+git clone https://github.com/surebeli/kata ~/kata
+copilot plugin install ~/kata
+```
+
+Copilot CLI reads kata's repo-root `plugin.json` (added in v2.15.2)
+which points its skill loader at `plugin/skills/`. After install,
+Copilot can describe-trigger any of the 18 kata skills by their
+SKILL.md description field.
+
+**Verify install:**
+
+```bash
+copilot plugin list                       # kata should appear
+copilot plugin info kata                  # version + skills count
+```
+
+**Path differences from A:**
+
+- Same on-disk skill files as Claude Code — kata's SKILL.md frontmatter
+  is dual-compatible (Claude Code requires `.claude-plugin/plugin.json`
+  to OMIT `skills` field; Copilot's root `plugin.json` declares
+  `skills: "plugin/skills/"`).
+- Deterministic Python scripts (`plugin/scripts/*.py`) work the same —
+  Copilot CLI invokes Python via skill body's shell directives.
+- `wiki-sync` git merge driver registers per-clone the same way.
+
+**Update / uninstall:**
+
+```bash
+copilot plugin update kata             # pulls latest from GitHub
+copilot plugin uninstall kata          # removes kata; wiki content stays put
+```
+
 ### After install (any path)
 
 Verify the skill set is wired:
@@ -337,6 +381,9 @@ ls ~/.claude/plugins/kata/plugin/skills/ 2>/dev/null
 
 # Codex CLI: generated user skills
 ls ~/.codex/skills/wiki-* 2>/dev/null
+
+# Copilot CLI: cached plugin
+copilot plugin list 2>/dev/null | grep kata
 ```
 
 Then jump to **Quick start** below to bootstrap your first wiki.

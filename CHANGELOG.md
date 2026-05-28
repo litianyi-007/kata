@@ -4,6 +4,59 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.15.2] — 2026-05-20 — GitHub Copilot CLI plugin compat
+
+`copilot plugin install surebeli/kata` was failing with:
+
+```
+Failed to install plugin: No plugin.json found in repository.
+Tried: .plugin\plugin.json, plugin.json, .github\plugin\plugin.json,
+       .claude-plugin\plugin.json
+```
+
+Copilot CLI searches for `plugin.json` only at **top-level** paths in
+the repo. Kata's canonical manifest lives at
+`plugin/.claude-plugin/plugin.json` because Claude Code finds it
+through `.claude-plugin/marketplace.json` (`source: ./plugin`). Copilot
+CLI doesn't recurse into subdirectories, so it never sees the manifest.
+
+### Added
+
+- **Repo-root `plugin.json`** — minimal Copilot-targeted manifest with
+  `skills: "plugin/skills/"` pointing at kata's actual skills
+  directory. Includes all standard metadata fields (`name`,
+  `version`, `description`, `author`, `homepage`, `repository`,
+  `license`, `keywords`) so `copilot plugin list` / `info` show kata
+  properly.
+- Schema reference: https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference
+
+### Notes
+
+- **Claude Code is unaffected.** Claude Code loads kata via
+  `.claude-plugin/marketplace.json` → `plugin/.claude-plugin/plugin.json`
+  (the canonical manifest). It does NOT read the new root-level
+  `plugin.json`. The root file is a Copilot-only pointer; the two
+  manifests intentionally diverge in scope (root has the `skills`
+  field that Claude Code rejects; canonical doesn't).
+- **Version sync**: bump both `plugin/.claude-plugin/plugin.json` and
+  the new root `plugin.json` together. The pre-commit version-drift
+  check (future v2.15.3 addition?) is a candidate for catching the
+  divergence automatically.
+- **Marketplace mirror** (for `copilot plugin marketplace add`) not
+  added in this release; would live at `.github/plugin/marketplace.json`.
+  Defer until requested.
+
+### Install via Copilot CLI
+
+```bash
+copilot plugin install surebeli/kata
+# Or local clone:
+git clone https://github.com/surebeli/kata ~/kata
+copilot plugin install ~/kata
+```
+
+See README "Install paths" for the full A/B/C/D matrix.
+
 ## [2.15.1] — 2026-05-20 — wiki-skill-create: supplement-action catalog
 
 User dogfood feedback on v2.15.0 surfaced two related gaps in the
