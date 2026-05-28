@@ -4,6 +4,99 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.15.1] — 2026-05-20 — wiki-skill-create: supplement-action catalog
+
+User dogfood feedback on v2.15.0 surfaced two related gaps in the
+generated work-loop skills:
+
+1. The Step 3 ("Source search + verification") was hardcoded to a
+   code-repo shape. Materials-management, doc-driven, or other
+   non-code projects had to manually rewrite the section after
+   generation. The "supplement to kata wiki" semantic was real but
+   not parameterized.
+2. When Step 2 (kata wiki query) returned no match, the generated
+   skill didn't escalate effort in Step 3. The asymmetry between
+   "wiki had a hit (verification mode)" and "wiki missed (primary
+   discovery mode)" was implicit — agents would investigate at the
+   same depth either way, missing the signal that a kata miss makes
+   Step 3 load-bearing and Step 7's file-back high-value (first-of-
+   kind contribution).
+
+v2.15.1 fixes both with a single abstraction: **supplement-action
+catalog**. The Step 3 slot is now parameterized; orchestrator asks
+the user which supplement fits their project; each snippet self-
+encodes the hit/miss escalation language.
+
+### Added
+
+- **4 supplement-action snippets** under
+  `plugin/skills/wiki-skill-create/snippets/`:
+  - `source-search.md.snippet` — Grep/Glob/Read on project source
+    code; default for code repos
+  - `web-search.md.snippet` — WebSearch + WebFetch; for materials,
+    research, knowledge-curation projects
+  - `doc-lookup.md.snippet` — local `docs/` + authoritative external
+    doc sites; for doc-driven projects
+  - `custom.md.snippet` — escape hatch with `{{CUSTOM_SUPPLEMENT_*}}`
+    placeholders for user-described supplement actions
+- **Each snippet self-encodes hit/miss escalation**: explicit "Default
+  approach (Step 2 returned a relevant hit)" + "Escalation when Step 2
+  missed" sections. The asymmetry between verification mode and
+  primary-discovery mode is now structural, not left to agent
+  judgment.
+- **`--supplement-action` flag on `skill_scaffold.py render`** —
+  defaults to `source-search` (matches v2.15.0 behavior). Accepts any
+  of the 4 catalog values.
+- **`{{SUPPLEMENT_ACTION_SECTION}}` placeholder** in all 4 pattern
+  templates, positioned per-pattern: issue-fix at Step 3,
+  feature-build at Step 2.5, bug-debug at Step 3.5, custom at Step 2.5.
+- **`suggested_supplement_action`** field in `discover` output —
+  heuristic recommendation based on tech-stack signals:
+  - Code stack detected → `source-search`
+  - Project has `docs/` dir → `doc-lookup`
+  - Mostly markdown + no manifest → `web-search`
+  - Else → no suggestion (user picks)
+- **Phase 2.5** added to `wiki-skill-create/SKILL.md` orchestrator —
+  presents the catalog via AskUserQuestion with the discovered
+  suggestion as the recommended option.
+
+### Changed
+
+- **Templates** no longer hardcode the "source-search" content at
+  Step 3. The `{{SUPPLEMENT_ACTION_SECTION}}` placeholder substitutes
+  the chosen snippet at render time. v2.15.0 templates still work
+  because the default supplement-action is `source-search`, which
+  produces functionally equivalent content to the old hardcoded
+  Step 3.
+
+### Tests
+
+- **T-skill-create-6a/b**: discover suggests `source-search` for code
+  project, `doc-lookup` for docs-driven project, lists all 4
+  supplement actions.
+- **T-skill-create-6c**: source-search / web-search / doc-lookup each
+  render at Step 3 of issue-fix with their distinctive title, both
+  hit-case and miss-case escalation language present.
+- **T-skill-create-6d**: custom supplement accepts six
+  `CUSTOM_SUPPLEMENT_*` --var overrides, all resolve, verify passes.
+- **T-skill-create-6e**: supplement section sits at the correct
+  pattern-specific step number (issue-fix=3, feature-build=2.5,
+  bug-debug=3.5, custom=2.5).
+
+61 smoke tests pass (56 prior + 5 new T-skill-create-6 sub-assertions).
+Pre-commit clean.
+
+### Notes
+
+- v2.15.0-generated skills (no `--supplement-action` specified) keep
+  working — they're equivalent to `--supplement-action source-search`.
+  No migration needed.
+- Default supplement = `source-search` preserves backwards compat.
+  Explicit `--supplement-action` gets the new behavior.
+- The hit/miss escalation language in each snippet closes the
+  "wiki-miss compensation" gap surfaced in the prior dogfood feedback
+  cycle without adding a separate prompt phase or template flag.
+
 ## [2.15.0] — 2026-05-20 — wiki-skill-create: work-loop bridge
 
 Kata's reach extends from "the documentation closed loop" to "the work

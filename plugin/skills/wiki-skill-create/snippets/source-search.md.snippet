@@ -1,0 +1,29 @@
+### {{SUPPLEMENT_STEP_NUM}}. Source search + verification
+
+Locate and verify against the **current source code** of this repo.
+This is the work-pipeline's primary-source check — the kata wiki tells
+you what was known *previously*; this step confirms what's *true now*.
+
+**Default approach** (Step 2 returned a relevant hit):
+- Use the prior wiki page's conclusion as a hypothesis
+- *Verify* with `Grep`, `Glob`, `Read` that the current source still
+  matches what the wiki claims — code drifts faster than wiki updates
+- State in 1-2 bullets what you confirmed (and what diverged) so the
+  user can sign off the diagnosis before any edit
+
+**Escalation when Step 2 missed** (no relevant prior wiki page):
+- This step is now the **primary diagnostic path**; be exhaustive
+- Broaden keywords; follow call chains 2-3 hops deep
+- `git log` on the relevant files for recent context the wiki hasn't
+  ingested yet
+- Look for tests that already exercise this area (they often encode
+  invariants no doc captures)
+- Your output here directly feeds Step 7's first-of-kind file-back —
+  the depth of investigation now sets the ceiling for what the next
+  agent inherits
+
+**Output of this step**:
+- File paths + line ranges relevant to the problem
+- 1-2 sentence diagnosis (what's actually happening, not just symptom)
+- A clear statement of "current source confirms the wiki's claim" OR
+  "current source diverges from the wiki — wiki is stale here"

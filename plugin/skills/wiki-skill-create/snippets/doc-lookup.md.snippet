@@ -1,0 +1,39 @@
+### {{SUPPLEMENT_STEP_NUM}}. Documentation lookup
+
+Search this project's **vendored / referenced documentation** and the
+authoritative external doc sites it depends on. Use when the project
+is documentation-driven or heavily depends on third-party APIs/SDKs
+where official docs are the canonical source of truth.
+
+**Default approach** (Step 2 returned a relevant hit):
+- Use the wiki page as the *summary*; jump straight to the cited
+  external doc(s) for full context
+- Verify the wiki summary against the current version of the official
+  doc — docs evolve and the wiki may reference older API shape
+- Note any version skew explicitly
+
+**Escalation when Step 2 missed** (no relevant prior wiki page):
+- This step becomes the **primary lookup path**
+- Search local `docs/` directory first (project-vendored references
+  often have the exact answer)
+- Then the authoritative external doc site (official framework docs,
+  language stdlib, vendor knowledge base)
+- If still empty: pivot to that tool's GitHub issues, community
+  forum, recent PR discussions — undocumented behavior often lives there
+- Your output here becomes the first kata-level "how this thing
+  works" page; cite the doc URLs precisely so the next agent doesn't
+  re-hunt
+
+**Tools likely needed**:
+- `Grep` / `Glob` against local `docs/` and `**/*.md`
+- `WebFetch` against known doc URLs (project's CLAUDE.md / AGENTS.md
+  may list the canonical references)
+- `WebSearch` only as last resort — official docs over search-result
+  aggregations
+
+**Output of this step**:
+- Specific doc paths + sections + version (e.g. `docs/api/auth.md
+  §3.2 (v2.4)`, or `nextjs.org/docs/app/auth (v15)`)
+- The exact paragraph(s) that answer the question
+- Note any docs that look stale or contradict the project's actual
+  behavior (this is itself a finding worth filing back)

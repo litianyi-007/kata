@@ -1,0 +1,37 @@
+### {{SUPPLEMENT_STEP_NUM}}. Web search + content review
+
+Reach for **external information sources** to supplement what kata's
+wiki couldn't surface. Useful when this project is materials-driven
+(research notes, knowledge curation, content authoring) rather than
+code-driven, OR when the topic is genuinely new and kata hasn't
+ingested anything yet.
+
+**Default approach** (Step 2 returned a relevant hit):
+- Treat web findings as *corroboration* — does the public state of the
+  world still match the prior wiki page's conclusion?
+- Pay attention to dates; newer authoritative sources can stale-out
+  wiki pages that were correct at ingest time
+- Capture URLs you'll cite in Step 7's file-back
+
+**Escalation when Step 2 missed** (no relevant prior wiki page):
+- This step becomes the **primary discovery path**
+- Cast a wider net: 2-3 query reformulations, mix specific terms with
+  conceptual terms
+- Prefer primary sources (official docs, vendor changelogs, papers,
+  domain authorities) over aggregator blogs
+- Skim 3-5 results; pull the 1-2 most authoritative full-page; save
+  evidence the file-back will cite
+- Your output here is the first kata-level synthesis of this topic —
+  the file-back's quality is bounded by the diversity of sources you
+  evaluate
+
+**Tools likely needed**:
+- `WebSearch` for broad discovery, `WebFetch` for full-page reads
+- Some CLI sessions don't have web access — if tools are unavailable,
+  stop and surface this to the user before continuing
+
+**Output of this step**:
+- 2-5 source URLs with their publication date + one-line summary
+- A short synthesis: "the public state says X; this matches/diverges
+  from the wiki because Y"
+- The single sentence you'd most want a future agent to retain

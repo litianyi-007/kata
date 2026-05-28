@@ -2,7 +2,7 @@
 name: wiki-skill-create
 description: "Generate a project-local skill that bridges kata's documentation loop (search/query/ingest) with the actual work pipeline of THIS project (code edit / test / build / human verify). Picks a pattern (issue-fix / feature-build / bug-debug / custom), captures project context (tech stack, build commands, kata wiki binding), renders a SKILL.md that encodes the 7-step work loop, runs static verification. v1.15 MVP. Closes the gap between 'what was figured out' and 'what kata's wiki knows.'"
 user-invocable: true
-argument-hint: "[--pattern <issue-fix|feature-build|bug-debug|custom>] [--name <skill-name>] [--target <claude-code|codex|wiki>] [--no-ingest-after]"
+argument-hint: "[--pattern <issue-fix|feature-build|bug-debug|custom>] [--supplement-action <source-search|web-search|doc-lookup|custom>] [--name <skill-name>] [--target <claude-code|codex|wiki>] [--no-ingest-after]"
 ---
 
 # wiki-skill-create
@@ -111,6 +111,60 @@ Sanity-check the choice against the discovery output. If the user picks
 `feature-build` but the project has no `wiki-spec` skill enabled or no
 kata wiki bound, flag the mismatch before proceeding.
 
+## Phase 2.5 — Pick a supplement action (v2.15.1+)
+
+The kata query in Step 2 of the generated skill won't always have a
+match. When it doesn't, the work loop pivots to a **primary source**
+to fill the gap. That primary source is project-specific — code repos
+use source search, materials projects use web search, doc-heavy
+projects use documentation lookup, niche scenarios use custom.
+
+`skill_scaffold.py discover` emits a `suggested_supplement_action`
+based on detected context:
+
+| Project signal | Suggested supplement |
+|---|---|
+| Tech stack detected (nodejs/python/rust/go/etc) | `source-search` |
+| Project has `docs/` directory | `doc-lookup` |
+| Mostly markdown, no manifest | `web-search` |
+| None of the above | No suggestion — ask user |
+
+Present the catalog via **AskUserQuestion** with the suggested option
+first (recommended):
+
+```
+Question: "When kata's wiki returns no match for the loop's input, what's
+          the primary source the agent should pivot to?"
+single-select
+options:
+  - label: "source-search (Recommended)"          # if suggestion was source-search
+    description: "Grep / Glob / Read against the project's source code. Best for code repos."
+  - label: "web-search"
+    description: "WebSearch + WebFetch against the public internet. Best for materials/research projects."
+  - label: "doc-lookup"
+    description: "Local docs/ + authoritative external doc sites (vendor docs, API references). Best for doc-driven projects."
+  - label: "custom"
+    description: "Describe your own supplement (data warehouse query, API probe, internal channel, etc.)"
+```
+
+If the user picks `custom`, collect six extra fields via short prompts:
+
+- `CUSTOM_SUPPLEMENT_TITLE` — section heading for the supplement step
+- `CUSTOM_SUPPLEMENT_DEFAULT` — what to do when kata had a hit
+- `CUSTOM_SUPPLEMENT_ESCALATION` — what to do when kata missed (more
+  aggressive)
+- `CUSTOM_SUPPLEMENT_TOOLS` — which tools the agent should reach for
+- `CUSTOM_SUPPLEMENT_OUTPUT` — what artifact to produce for Step 7
+
+These pass to `skill_scaffold.py render` via `--var KEY=VALUE`.
+
+**Each supplement-action snippet auto-encodes hit/miss escalation
+language.** When kata has a hit, the supplement step is *verification*
+(corroborate against primary source). When kata misses, the supplement
+step is *load-bearing discovery* (primary diagnosis path; Step 7's
+file-back becomes high-value as first-of-kind kata content). This
+asymmetry is baked into every snippet — no extra prompting needed.
+
 ## Phase 3 — Capture skill metadata
 
 Three short prompts (don't bundle into one giant AskUserQuestion — clarity
@@ -151,6 +205,7 @@ Invoke the scaffold:
 ```bash
 python {plugin_root}/scripts/skill_scaffold.py render \
     --pattern {pattern} \
+    --supplement-action {supplement} \
     --skill-name {name} \
     --target {target}
 ```

@@ -66,8 +66,27 @@ DEFAULT_TEMPLATES_DIR = (
     / "skills" / "wiki-skill-create" / "templates"
 )
 
+# Where supplement-action snippets live (sibling of templates dir).
+DEFAULT_SNIPPETS_DIR = (
+    Path(__file__).resolve().parent.parent
+    / "skills" / "wiki-skill-create" / "snippets"
+)
+
 # Sentinel comment marker that identifies kata-generated skills.
 SENTINEL_PREFIX = "<!-- kata:generated-skill"
+
+# Step number at which the supplement-action section sits in each pattern.
+# This is what the `{{SUPPLEMENT_STEP_NUM}}` placeholder in each snippet
+# gets substituted with.
+PATTERN_SUPPLEMENT_STEP_NUM = {
+    "issue-fix": "3",
+    "feature-build": "2.5",
+    "bug-debug": "3.5",
+    "custom": "2.5",
+}
+
+# Friendly display names for the supplement-action catalog.
+SUPPLEMENT_ACTIONS = ["source-search", "web-search", "doc-lookup", "custom"]
 
 # Default ingest page types per pattern (used when rendering for
 # patterns that wire wiki-ingest defaults — currently only custom uses
@@ -303,7 +322,11 @@ def cmd_discover(args) -> int:
 
     templates_dir = Path(args.templates_dir).resolve() if args.templates_dir \
         else DEFAULT_TEMPLATES_DIR
+    snippets_dir = Path(args.snippets_dir).resolve() if args.snippets_dir \
+        else DEFAULT_SNIPPETS_DIR
     available_patterns = _list_patterns_from_dir(templates_dir)
+    available_supplements = _list_supplement_actions(snippets_dir)
+    suggested = _suggest_supplement_action(stacks, project_root)
 
     emit({
         "project_root": str(project_root),
@@ -319,7 +342,10 @@ def cmd_discover(args) -> int:
         "existing_generated_skills": existing,
         "kata_version": _read_kata_version(),
         "available_patterns": available_patterns,
+        "available_supplement_actions": available_supplements,
+        "suggested_supplement_action": suggested,
         "templates_dir": str(templates_dir),
+        "snippets_dir": str(snippets_dir),
     })
     return 0
 
@@ -336,6 +362,46 @@ def _list_patterns_from_dir(templates_dir: Path) -> list[str]:
 
 def _template_path(templates_dir: Path, pattern: str) -> Path:
     return templates_dir / f"{pattern}.md.tmpl"
+
+
+def _snippet_path(snippets_dir: Path, action: str) -> Path:
+    return snippets_dir / f"{action}.md.snippet"
+
+
+def _list_supplement_actions(snippets_dir: Path) -> list[str]:
+    if not snippets_dir.is_dir():
+        return []
+    return sorted(p.stem.replace(".md", "") for p in snippets_dir.glob("*.md.snippet"))
+
+
+def _suggest_supplement_action(tech_stack: list[str],
+                                project_root: Path) -> str | None:
+    """Heuristic: recommend a default supplement action based on context.
+
+    - Any code-language stack detected → source-search
+    - Project has `docs/` dir → doc-lookup
+    - Mostly markdown, no manifest → web-search
+    - Otherwise → no recommendation (let user pick)
+    """
+    code_stacks = {"nodejs", "typescript", "python", "rust", "go",
+                   "gradle", "maven"}
+    if any(s in code_stacks for s in tech_stack):
+        return "source-search"
+    if (project_root / "docs").is_dir():
+        return "doc-lookup"
+    # Mostly-markdown heuristic — count top-level .md files
+    md_count = 0
+    try:
+        for entry in project_root.iterdir():
+            if entry.suffix.lower() == ".md":
+                md_count += 1
+                if md_count >= 3:
+                    break
+    except OSError:
+        pass
+    if md_count >= 3 and not tech_stack:
+        return "web-search"
+    return None
 
 
 def _resolve_target_path(target: str, skill_name: str,
@@ -400,6 +466,8 @@ def _substitute(template_text: str, vars_map: dict) -> str:
 def cmd_render(args) -> int:
     templates_dir = Path(args.templates_dir).resolve() if args.templates_dir \
         else DEFAULT_TEMPLATES_DIR
+    snippets_dir = Path(args.snippets_dir).resolve() if args.snippets_dir \
+        else DEFAULT_SNIPPETS_DIR
     pattern = args.pattern
     tmpl_path = _template_path(templates_dir, pattern)
     if not tmpl_path.is_file():
@@ -407,6 +475,18 @@ def cmd_render(args) -> int:
             "error": f"template not found for pattern={pattern}",
             "templates_dir": str(templates_dir),
             "available": _list_patterns_from_dir(templates_dir),
+        })
+        return 1
+
+    # Resolve supplement action — default to source-search for backwards
+    # compatibility with v2.15.0 callers that don't pass --supplement-action.
+    supplement_action = args.supplement_action or "source-search"
+    snippet_file = _snippet_path(snippets_dir, supplement_action)
+    if not snippet_file.is_file():
+        emit({
+            "error": f"snippet not found for supplement-action={supplement_action}",
+            "snippets_dir": str(snippets_dir),
+            "available": _list_supplement_actions(snippets_dir),
         })
         return 1
 
@@ -473,6 +553,42 @@ def cmd_render(args) -> int:
             "INGEST_PAGE_TYPE",
             PATTERN_DEFAULT_INGEST_TYPE.get(pattern, "lesson"),
         )
+
+    # Custom supplement-action snippet needs its own inner placeholders.
+    # Fill defaults so unsupplied --var don't crash the inner substitution.
+    if supplement_action == "custom":
+        vars_map.setdefault("CUSTOM_SUPPLEMENT_TITLE",
+                            "Bring in primary sources")
+        vars_map.setdefault("CUSTOM_SUPPLEMENT_DEFAULT",
+                            "<describe how to corroborate against your supplement source when kata had a hit>")
+        vars_map.setdefault("CUSTOM_SUPPLEMENT_ESCALATION",
+                            "<describe the load-bearing investigation when kata had no hit>")
+        vars_map.setdefault("CUSTOM_SUPPLEMENT_TOOLS",
+                            "<list tool(s) the agent should reach for>")
+        vars_map.setdefault("CUSTOM_SUPPLEMENT_OUTPUT",
+                            "<what to capture for Step 7's file-back>")
+
+    # Render the supplement-action snippet, then substitute it into the
+    # template's {{SUPPLEMENT_ACTION_SECTION}} placeholder before the
+    # template's own top-level substitution runs.
+    snippet_text = snippet_file.read_text(encoding="utf-8")
+    snippet_vars = dict(vars_map)
+    snippet_vars["SUPPLEMENT_STEP_NUM"] = PATTERN_SUPPLEMENT_STEP_NUM.get(
+        pattern, "2.5"
+    )
+    try:
+        rendered_snippet = _substitute(snippet_text, snippet_vars)
+    except KeyError as e:
+        emit({
+            "error": f"snippet references unknown variable {{{{{e.args[0]}}}}}",
+            "snippet_path": str(snippet_file),
+            "supplement_action": supplement_action,
+            "hint": "for `custom` supplement, supply CUSTOM_SUPPLEMENT_* vars via --var",
+        })
+        return 1
+    # Inject snippet content (stripped of trailing blank) into the template's
+    # placeholder. Then the outer _substitute pass fills SKILL_NAME, etc.
+    vars_map["SUPPLEMENT_ACTION_SECTION"] = rendered_snippet.rstrip()
 
     tmpl_text = tmpl_path.read_text(encoding="utf-8")
     try:
@@ -684,6 +800,8 @@ def main() -> int:
                     help="override project root (default: os.getcwd())")
     pd.add_argument("--templates-dir", default=None,
                     help="override templates dir (default: ../skills/wiki-skill-create/templates/)")
+    pd.add_argument("--snippets-dir", default=None,
+                    help="override snippets dir (default: ../skills/wiki-skill-create/snippets/)")
     pd.set_defaults(func=cmd_discover)
 
     # render
@@ -695,6 +813,12 @@ def main() -> int:
     pr.add_argument("--target", default="claude-code",
                     help="symbolic (claude-code|codex|wiki) or absolute path")
     pr.add_argument("--templates-dir", default=None)
+    pr.add_argument("--snippets-dir", default=None,
+                    help="override snippets dir (default: alongside templates)")
+    pr.add_argument("--supplement-action", default=None,
+                    help="supplement-action: source-search (default) / web-search "
+                         "/ doc-lookup / custom. Snippet content fills the "
+                         "{{SUPPLEMENT_ACTION_SECTION}} placeholder in the template.")
     pr.add_argument("--project-root", default=None)
     pr.add_argument("--dry-run", action="store_true",
                     help="render but do not write; emit preview")

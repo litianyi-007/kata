@@ -4249,7 +4249,145 @@ print(json.dumps({{
     print("  ok  T-skill-create-5: explicit-path target works, custom pattern "
           "consumes --var overrides, verify passes")
 
-    # Cleanup parametric + explicit fixtures
+    # T-skill-create-6 (v2.15.1): supplement-action catalog.
+    # Verify discover emits suggested_supplement_action; verify all 4
+    # supplement actions can render into the issue-fix template; verify
+    # each snippet shows up in the correct Step position; verify custom
+    # supplement consumes its CUSTOM_SUPPLEMENT_* vars.
+    sup_proj = FIXTURE.parent / "_skill_create_supp_proj"
+    if sup_proj.exists():
+        _windows_safe_rmtree(sup_proj)
+    sup_proj.mkdir(parents=True)
+    (sup_proj / ".git").mkdir()
+    (sup_proj / "package.json").write_text(
+        json.dumps({"name": "supp-app",
+                    "scripts": {"test": "jest", "build": "tsc"}}),
+        encoding="utf-8")
+
+    # T-skill-create-6a — discover suggests source-search for code project
+    disc = run([str(SCRIPTS / "skill_scaffold.py"), "discover",
+                "--project-root", str(sup_proj)])
+    assert_eq("T-skill-create-6a: suggested for code project",
+              disc.get("suggested_supplement_action"), "source-search")
+    assert sorted(disc.get("available_supplement_actions") or []) == \
+        ["custom", "doc-lookup", "source-search", "web-search"], \
+        f"all 4 supplement actions must be discoverable; got " \
+        f"{disc.get('available_supplement_actions')}"
+
+    # T-skill-create-6b — discover suggests doc-lookup when docs/ dir exists
+    doc_proj = FIXTURE.parent / "_skill_create_doc_proj"
+    if doc_proj.exists():
+        _windows_safe_rmtree(doc_proj)
+    doc_proj.mkdir(parents=True)
+    (doc_proj / ".git").mkdir()
+    (doc_proj / "docs").mkdir()
+    disc_doc = run([str(SCRIPTS / "skill_scaffold.py"), "discover",
+                    "--project-root", str(doc_proj)])
+    assert_eq("T-skill-create-6b: suggested for doc-driven project",
+              disc_doc.get("suggested_supplement_action"), "doc-lookup")
+
+    # T-skill-create-6c — each of 4 supplements renders into issue-fix and
+    # the resulting Step 3 heading reflects the action's title.
+    supplement_signatures = {
+        "source-search": "Source search + verification",
+        "web-search":    "Web search + content review",
+        "doc-lookup":    "Documentation lookup",
+    }
+    for action, signature in supplement_signatures.items():
+        sname = f"t-sup-{action.replace('_', '-')}"
+        run([str(SCRIPTS / "skill_scaffold.py"), "render",
+             "--pattern", "issue-fix",
+             "--skill-name", sname,
+             "--supplement-action", action,
+             "--target", "claude-code",
+             "--project-root", str(sup_proj)])
+        sp = sup_proj / ".claude" / "skills" / sname / "SKILL.md"
+        assert sp.is_file(), f"render did not write to {sp}"
+        text = sp.read_text(encoding="utf-8")
+        assert f"### 3. {signature}" in text, \
+            f"supplement-action={action} should produce '### 3. {signature}'; " \
+            f"first 1500 chars: {text[:1500]}"
+        # Both hit-case and miss-case escalation language present
+        assert "Step 2 returned a relevant hit" in text or \
+               "Step 2 had a relevant hit" in text or \
+               "Step 2 returned a relevant" in text, \
+            f"{action} snippet should describe hit-case behavior"
+        assert "Step 2 missed" in text or "no relevant prior wiki page" in text, \
+            f"{action} snippet should describe miss-case escalation"
+        vr = run([str(SCRIPTS / "skill_scaffold.py"), "verify", str(sp)])
+        assert vr["ok"] is True, \
+            f"{action} render must verify; failures={vr.get('failures')}"
+    print("  ok  T-skill-create-6c: source-search / web-search / doc-lookup "
+          "snippets each render at Step 3 with hit + miss escalation language")
+
+    # T-skill-create-6d — custom supplement-action consumes its --var overrides
+    custom_sup_target = sup_proj / ".claude" / "skills" / "t-sup-custom" / "SKILL.md"
+    run([str(SCRIPTS / "skill_scaffold.py"), "render",
+         "--pattern", "issue-fix",
+         "--skill-name", "t-sup-custom",
+         "--supplement-action", "custom",
+         "--target", "claude-code",
+         "--project-root", str(sup_proj),
+         "--var", "CUSTOM_SUPPLEMENT_TITLE=Query internal data warehouse",
+         "--var", "CUSTOM_SUPPLEMENT_DEFAULT=Run the dashboard query",
+         "--var", "CUSTOM_SUPPLEMENT_ESCALATION=Pull a 30-day rollup + ask the analyst",
+         "--var", "CUSTOM_SUPPLEMENT_TOOLS=internal-bi-cli, looker",
+         "--var", "CUSTOM_SUPPLEMENT_OUTPUT=A 5-line summary of the relevant metrics"])
+    text_cust = custom_sup_target.read_text(encoding="utf-8")
+    assert "Query internal data warehouse" in text_cust, \
+        "custom-supplement title var should land"
+    assert "internal-bi-cli, looker" in text_cust, \
+        "custom-supplement tools var should land"
+    assert "{{CUSTOM_SUPPLEMENT" not in text_cust, \
+        "all custom-supplement placeholders should be resolved"
+    vr_cust = run([str(SCRIPTS / "skill_scaffold.py"), "verify",
+                   str(custom_sup_target)])
+    assert vr_cust["ok"] is True, \
+        f"custom supplement render must verify; failures={vr_cust.get('failures')}"
+    print("  ok  T-skill-create-6d: custom supplement-action accepts --var "
+          "CUSTOM_SUPPLEMENT_* overrides and verify passes")
+
+    # T-skill-create-6e — per-pattern step number for supplement section.
+    # issue-fix → Step 3, feature-build → Step 2.5, bug-debug → Step 3.5,
+    # custom pattern → Step 2.5.
+    pattern_step_nums = {
+        "issue-fix":     "### 3.",
+        "feature-build": "### 2.5.",
+        "bug-debug":     "### 3.5.",
+        "custom":        "### 2.5.",
+    }
+    for pat, step_prefix in pattern_step_nums.items():
+        sname = f"t-stepnum-{pat}"
+        # Custom pattern body needs its own placeholders too; supply minimal
+        # values for custom pattern (separate from custom supplement-action).
+        extra_var = []
+        if pat == "custom":
+            extra_var += [
+                "--var", "DESCRIPTION=Use when running a custom workflow.",
+                "--var", "WHEN_TO_USE=- A custom trigger fires",
+                "--var", "WHEN_NOT_TO_USE=- The basic loop fits",
+                "--var", "CUSTOM_STEPS=3.1 step",
+                "--var", "MANUAL_VERIFICATION=Check it",
+                "--var", "ARGUMENT_HINT=<arg>",
+            ]
+        run([str(SCRIPTS / "skill_scaffold.py"), "render",
+             "--pattern", pat,
+             "--skill-name", sname,
+             "--supplement-action", "source-search",
+             "--target", "claude-code",
+             "--project-root", str(sup_proj)] + extra_var)
+        sp = sup_proj / ".claude" / "skills" / sname / "SKILL.md"
+        text = sp.read_text(encoding="utf-8")
+        assert step_prefix + " Source search + verification" in text, \
+            f"pattern={pat} should put supplement at '{step_prefix} Source ...'; " \
+            f"first 1500 chars: {text[:1500]}"
+    print("  ok  T-skill-create-6e: supplement section sits at the correct "
+          "step number per pattern (issue-fix=3, feature-build=2.5, "
+          "bug-debug=3.5, custom=2.5)")
+
+    # Cleanup
+    _windows_safe_rmtree(sup_proj)
+    _windows_safe_rmtree(doc_proj)
     _windows_safe_rmtree(sc_proj)
     _windows_safe_rmtree(custom_target.parent)
 
