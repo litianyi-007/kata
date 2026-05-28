@@ -1,6 +1,6 @@
 ---
 name: kata
-description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 17 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server / federate). v1.11 session-ingest MVP. **v1.12 cross-wiki federation complete**. **v1.13 SHM complete (Phase 0+2+3+4)**: advisory preflight + enforcement gate + auto-propagation + `wiki-graph --mode spec-history` lineage view (text / json / mermaid; cross-wiki kata:// supersedes shown as federated leaves; reads .spec-reverse-index.yaml)."
+description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 18 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server / federate / skill-create). **v1.13 SHM complete (Phase 0+2+3+4)**. **v1.15 work-loop bridge**: `wiki-skill-create` generates project-local skills wrapping kata's query/ingest with the project's actual work pipeline (issue-fix / feature-build / bug-debug / custom patterns); closes consult-before / file-back-after as structural default rather than discipline."
 version: 2.13.0
 author: surebeli
 license: MIT
@@ -135,6 +135,7 @@ confirmation. See `PLUGINS.md` (or the `wiki-query` skill) for the full spec.
 | `wiki-query` | `<question> [--file] [--format=markdown\|table\|slides\|chart\|canvas] [--tier=active\|all\|archived\|frozen] [--external] [--no-external] [--auto-external]` | Answer a question using the wiki's compiled knowledge. Searches relevant pages, synthesizes with ci… |
 | `wiki-search` | `<query> [--tag=<tag>] [--type=entity\|concept\|comparison\|query] [--limit=10] [--tier=active\|all\|archived\|frozen]` | Search the wiki by keyword, tag, topic, or type. Returns ranked results with page summaries and mat… |
 | `wiki-session-ingest` | `[--session-id <id>] [--session-file <path>] [--cli <name>] [--max-tool-output-lines N] [--full] [--auto-trigger]` | Ingest the active AI CLI session into the wiki: detect which CLI you're in (Claude Code / Codex CLI… |
+| `wiki-skill-create` | `[--pattern <issue-fix\|feature-build\|bug-debug\|custom>] [--name <skill-name>] [--target <claude-code\|codex\|wiki>] [--no-ingest-after]` | Generate a project-local skill that bridges kata's documentation loop (search/query/ingest) with th… |
 | `wiki-spec` | `preflight --new-spec <path> [--wiki=<path>] [--limit=10] [--include-archived] [--enforce] [--enforce-threshold=<float>] [--enforce-mode=strict\|confirm]` | Spec history management. Before authoring a new spec (PRD / design / RFC / ADR / task-spec / decisi… |
 | `wiki-sync` | `[--auto] [--dry-run]` | Multi-machine git sync for the wiki: pull, merge with custom drivers (log.md union+sort), push. Loc… |
 | `wiki-tier` | `[--show] [--set-active=Nd] [--set-archived=Nd] [--set-field=published_at\|ingested_at] [--preview] [--pin=<page>:<tier>] [--unpin=<page>] [--list=<tier>] [--disable] [--enable]` | Inspect and manage the memory-tier system: view the active/archived/frozen distribution, preview a… |
@@ -599,6 +600,60 @@ spec_relationships:
 
 See `plugin/skills/wiki-spec/SKILL.md` for the full per-phase contract and
 `docs/PRD-v1.13-spec-history-management.md` (forthcoming) for design.
+
+---
+
+### wiki-skill-create (work-loop bridge — v1.15)
+**Trigger:** "wire kata into this project's workflow", "create a project-local skill", "generate a fix-loop / feature-loop / debug-loop skill"
+
+**Arguments:** `[--pattern <issue-fix|feature-build|bug-debug|custom>]`, `[--name <kebab>]`, `[--target <claude-code|codex|wiki>]`, `[--no-ingest-after]`
+
+Generates a **project-local skill** that wraps kata's documentation loop
+(search / query / ingest) with the project's actual work pipeline (code
+edit / test / build / human verify) into one closed loop. The generated
+skill is checked into the project repo and becomes the default entry
+point for that kind of work in that project — consult-before /
+file-back-after becomes structural, not a discipline.
+
+**MVP patterns (4):**
+- `issue-fix` — concrete bugfix or fix request; canonical 7-step loop
+- `feature-build` — feature with design phase; couples with `wiki-spec`
+  Phase 0+2 preflight; files back both spec AND impl learnings
+- `bug-debug` — systematic investigation; reproduces, searches kata by
+  symptom AND mechanism, files back lesson with root cause dominant
+- `custom` — escape hatch; user describes the middle phases, kata wraps
+  with query / human-gate / file-back bookends
+
+**Discovery (automatic before render):**
+- Project root + git root + project name (from `package.json.name`,
+  `Cargo.toml [package].name`, `go.mod module`, or pyproject.toml
+  `[project].name`; falls back to git root dir name)
+- Tech stack: nodejs / typescript / python / rust / go / gradle / maven
+- Default test / build / lint commands (read from package.json scripts
+  if present; sensible defaults per stack otherwise)
+- Kata wiki binding (same `find_wiki_root()` resolution as other kata
+  skills; placeholder if unbound)
+- Existing kata-generated skills (detected via the sentinel comment)
+
+**Verification (9 static checks after render):**
+frontmatter parses; required fields; name `^[a-z][a-z0-9-]*$`; ≤ 1024
+chars frontmatter; description starts with "Use when"; third-person
+only; sentinel comment present; no unresolved `{{VAR}}`; argument-hint
+when user-invocable.
+
+**Placement:**
+- `--target claude-code` (default) → `<project>/.claude/skills/<name>/SKILL.md`
+- `--target codex` → `~/.codex/skills/<name>/SKILL.md`
+- `--target wiki` → `<wiki_path>/skills/<name>/SKILL.md` (rare)
+- Or any explicit path
+
+**Sentinel** in every generated SKILL.md:
+`<!-- kata:generated-skill pattern=<p> kata_version=<v> generated_at=<iso> -->`
+
+See `plugin/skills/wiki-skill-create/SKILL.md` for the orchestrator
+contract, `plugin/skills/wiki-skill-create/templates/` for the four
+pattern templates, and `docs/PRD-v1.15-work-loop-bridge.md` for the
+strategic framing.
 
 ---
 

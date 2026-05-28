@@ -4,6 +4,109 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.15.0] — 2026-05-20 — wiki-skill-create: work-loop bridge
+
+Kata's reach extends from "the documentation closed loop" to "the work
+execution closed loop." `wiki-skill-create` is a meta-skill that
+generates a **project-local skill** wrapping kata's query/ingest
+capabilities with the project's actual work pipeline (code edit / test
+/ build / human verify) into one closed loop. The generated skill
+becomes the default entry point for that kind of work in that project
+— consult-before / file-back-after is now the structural shape, not
+a discipline the user has to remember.
+
+### Added
+
+- **`wiki-skill-create` skill** (`plugin/skills/wiki-skill-create/SKILL.md`)
+  — 7-phase orchestrator: discover context → pick pattern → capture
+  metadata → render → verify → next-steps → optional wiki-ingest.
+- **`skill_scaffold.py`** (`plugin/scripts/`) — deterministic engine
+  with 4 subcommands:
+  - `discover` — emit JSON envelope of project root, git root,
+    project name (from package.json / Cargo.toml / pyproject.toml /
+    go.mod manifest, falling back to dir name), tech stack, default
+    test / build / lint commands, kata wiki binding, existing skill
+    homes, prior kata-generated skills.
+  - `render --pattern <name> --skill-name <kebab> [--target ...]
+    [--var KEY=VALUE]` — substitute `{{VAR}}` placeholders in a
+    template and write to target (symbolic `claude-code` / `codex` /
+    `wiki` or explicit path). `--dry-run` previews without writing.
+  - `verify <skill-path>` — 9 static checks (frontmatter parses,
+    required fields, name format, length ≤ 1024 chars, description
+    starts with "Use when", third-person check, sentinel comment
+    present, no unresolved placeholders, argument-hint required when
+    user-invocable).
+  - `list-patterns` — enumerate available templates.
+- **4 pattern templates** (`plugin/skills/wiki-skill-create/templates/`):
+  - `issue-fix.md.tmpl` — canonical 7-step loop for concrete fix
+    requests
+  - `feature-build.md.tmpl` — adds spec phase + `wiki-spec preflight`
+    integration before implementation; files back both spec and impl
+    learnings (couples with v1.13 SHM)
+  - `bug-debug.md.tmpl` — reproduction + symptom/mechanism dual
+    search + regression test emphasis; files back as lesson with root
+    cause as dominant content
+  - `custom.md.tmpl` — escape hatch: user describes the middle
+    phases, kata wraps with query / human-gate / file-back bookends
+- **Sentinel comment** in every generated skill:
+  `<!-- kata:generated-skill pattern=<p> kata_version=<v> generated_at=<iso> -->`
+  — provenance marker for future kata tooling to identify generated
+  skills (e.g. v1.16's planned `--update <name>` workflow).
+- **PRD-v1.15** (`docs/PRD-v1.15-work-loop-bridge.md`) — strategic
+  framing (kata Phase 1+ extends into work execution layer), pattern
+  catalog rationale, placement rules, wiki-linkage two-layer model,
+  open questions, related work (PRD-v1.11, PRD-v1.13).
+
+### Tests
+
+- **T-skill-create-1** — discover on a JS+TS fixture detects nodejs +
+  typescript stack, maps `package.json` scripts to test/build/lint
+  commands, finds `.claude/skills` home, lists all 4 patterns.
+- **T-skill-create-2** — render `issue-fix` to `.claude/skills/<name>/`,
+  all 9 verify checks pass, substitutions land (project name from
+  `package.json.name`, test command, sentinel marker).
+- **T-skill-create-3** — parametric render across all 4 patterns;
+  each produces distinct middle-phase content and independently passes
+  verify.
+- **T-skill-create-4** — verify rejects (a) unresolved placeholder,
+  (b) first-person description ("I/me/my/we/our"), (c) missing
+  sentinel, (d) uppercase name. Each case emits the specific failed
+  check name.
+- **T-skill-create-5** — explicit-path target works (vs symbolic);
+  custom pattern consumes `--var KEY=VALUE` overrides for the
+  freeform middle phases.
+
+### Strategic positioning
+
+Kata's reach after v1.15:
+
+```
+Phase 1 — AI-paired engineering
+  ├─ Doc loop closed                (v1.1–v1.10)
+  ├─ Spec drift defended            (v1.13 SHM)
+  └─ Work execution loop closed     (v1.15 — this release)    ← NEW
+```
+
+The three reaches close the three places where knowledge leaks in
+AI-paired engineering: when a source enters (ingest), when specs
+accumulate (preflight), and when work is executed (the work loop).
+Each leak point now has a skill.
+
+### Notes
+
+- **No auto-update on kata bumps yet** — v2.15.0-generated skills
+  don't refresh against future kata versions automatically. v1.16
+  will add a sentinel-aware `--update` workflow that preserves
+  user-added sections.
+- **Single-target render per invocation** — to put a skill in both
+  `.claude/skills/` and `~/.codex/skills/`, run twice with different
+  `--target`. `--target both` is future polish.
+- **Generated skills follow strict Anthropic SKILL.md format** — no
+  kata-specific frontmatter fields, so generated skills are portable
+  to any SKILL.md-aware environment.
+- **17 → 18 kata skills.** `wiki-skill-create` joins the existing
+  set; total now matches the layered model's three Phase 1 reaches.
+
 ## [2.14.0] — 2026-05-20 — wiki-session-ingest: incremental mode (default)
 
 `wiki-session-ingest` previously re-parsed the entire session JSONL on

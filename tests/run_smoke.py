@@ -4046,6 +4046,213 @@ print(json.dumps({{
     print("  ok  T-graph-4 (bonus): inbound walk — F015's spec-history "
           "correctly lists F017 as supersedes-source")
 
+    print("\nTest 51-55: v1.15 wiki-skill-create — scaffold engine (T-skill-create-1..5)")
+    # Build a JS-fixture project so `discover` has a real tech stack to detect.
+    sc_proj = FIXTURE.parent / "_skill_create_js_proj"
+    if sc_proj.exists():
+        _windows_safe_rmtree(sc_proj)
+    sc_proj.mkdir(parents=True)
+    # Mark it as its own git repo so _detect_git_root in skill_scaffold.py
+    # doesn't walk up and pick the surrounding kata repo as the project name.
+    (sc_proj / ".git").mkdir()
+    (sc_proj / "package.json").write_text(
+        json.dumps({
+            "name": "demo-app",
+            "version": "0.1.0",
+            "scripts": {
+                "test": "jest",
+                "build": "tsc -p .",
+                "lint": "eslint src/",
+            },
+            "devDependencies": {"typescript": "^5.0.0"},
+        }, indent=2),
+        encoding="utf-8")
+    (sc_proj / ".claude" / "skills").mkdir(parents=True)
+
+    # T-skill-create-1: discover detects nodejs + typescript, reads
+    # package.json scripts, finds existing skill home.
+    sc_discover = run(
+        [str(SCRIPTS / "skill_scaffold.py"), "discover",
+         "--project-root", str(sc_proj)])
+    assert "nodejs" in sc_discover["tech_stack"], \
+        f"expected nodejs in tech_stack; got {sc_discover['tech_stack']}"
+    assert "typescript" in sc_discover["tech_stack"], \
+        f"expected typescript in tech_stack; got {sc_discover['tech_stack']}"
+    assert_eq("T-skill-create-1: test_command",
+              sc_discover["test_command"], "npm test")
+    assert_eq("T-skill-create-1: build_command",
+              sc_discover["build_command"], "npm run build")
+    assert_eq("T-skill-create-1: lint_command",
+              sc_discover["lint_command"], "npm run lint")
+    assert ".claude/skills" in sc_discover["existing_skill_homes"], \
+        f"should detect existing .claude/skills; got " \
+        f"{sc_discover['existing_skill_homes']}"
+    assert sorted(sc_discover["available_patterns"]) == \
+        ["bug-debug", "custom", "feature-build", "issue-fix"], \
+        f"4 MVP patterns must be discoverable; got " \
+        f"{sc_discover['available_patterns']}"
+    print("  ok  T-skill-create-1: discover detected nodejs/typescript stack, "
+          "npm scripts mapped to test/build/lint, .claude/skills home found, "
+          "4 patterns available")
+
+    # T-skill-create-2: render issue-fix, verify all 9 checks pass.
+    sc_target_dir = sc_proj / ".claude" / "skills" / "fix-loop"
+    sc_render1 = run(
+        [str(SCRIPTS / "skill_scaffold.py"), "render",
+         "--pattern", "issue-fix",
+         "--skill-name", "fix-loop",
+         "--target", "claude-code",
+         "--project-root", str(sc_proj)])
+    assert_eq("T-skill-create-2: render pattern", sc_render1["pattern"], "issue-fix")
+    assert_eq("T-skill-create-2: render skill_name",
+              sc_render1["skill_name"], "fix-loop")
+    sc_skill1 = sc_target_dir / "SKILL.md"
+    assert sc_skill1.is_file(), f"render must write to claude-code target; not found at {sc_skill1}"
+    # Verify
+    sc_verify1 = run(
+        [str(SCRIPTS / "skill_scaffold.py"), "verify", str(sc_skill1)])
+    assert_eq("T-skill-create-2: verify ok", sc_verify1["ok"], True)
+    assert sc_verify1["failures"] == [], \
+        f"all 9 checks should pass on rendered issue-fix; failures={sc_verify1['failures']}"
+    # Sanity: substitutions actually happened
+    body = sc_skill1.read_text(encoding="utf-8")
+    assert "name: fix-loop" in body, "name not substituted"
+    assert "demo-app" in body, "project name not substituted"
+    assert "npm test" in body, "test command not substituted"
+    assert "{{" not in body, f"unresolved placeholder in rendered SKILL.md: {body[:500]}"
+    assert "kata:generated-skill pattern=issue-fix" in body, \
+        "sentinel comment with pattern missing"
+    print("  ok  T-skill-create-2: issue-fix rendered to .claude/skills/fix-loop/, "
+          "all 9 verify checks pass, substitutions land")
+
+    # T-skill-create-3: parametric render across all 4 patterns. Each gets
+    # a distinct middle-phase signature so we can verify they aren't all
+    # rendering the same template.
+    pattern_signatures = {
+        "issue-fix": "Modify (only if needed)",
+        "feature-build": "Preflight the spec against kata",
+        "bug-debug": "Add a regression test",
+        "custom": "Execute the work (user-defined steps)",
+    }
+    for pat, signature in pattern_signatures.items():
+        sname = f"p-{pat.replace('_', '-')}-loop"
+        run([str(SCRIPTS / "skill_scaffold.py"), "render",
+             "--pattern", pat,
+             "--skill-name", sname,
+             "--target", "claude-code",
+             "--project-root", str(sc_proj)])
+        sp = sc_proj / ".claude" / "skills" / sname / "SKILL.md"
+        assert sp.is_file(), f"{pat} render did not write to {sp}"
+        text = sp.read_text(encoding="utf-8")
+        assert signature in text, \
+            f"{pat} template should contain pattern-distinctive text " \
+            f"{signature!r}; first 800 chars: {text[:800]}"
+        vr = run([str(SCRIPTS / "skill_scaffold.py"), "verify", str(sp)])
+        assert vr["ok"] is True, \
+            f"verify failed for {pat}: {vr.get('failures')}"
+    print("  ok  T-skill-create-3: all 4 patterns render with distinct "
+          "middle-phase content + each passes verify independently")
+
+    # T-skill-create-4: verify rejects malformed SKILL.md.
+    # Case A — unresolved placeholder
+    bad_path = sc_proj / "_bad_unresolved.md"
+    bad_path.write_text(
+        "---\nname: bad-skill\ndescription: Use when something happens\n"
+        "user-invocable: true\nargument-hint: \"<x>\"\n---\n\n"
+        "# Bad Skill\n\nBody has {{LEFTOVER}} placeholder.\n"
+        "<!-- kata:generated-skill pattern=issue-fix kata_version=test "
+        "generated_at=2026-05-20T00:00:00Z -->\n",
+        encoding="utf-8")
+    vr_bad = run([str(SCRIPTS / "skill_scaffold.py"), "verify", str(bad_path)],
+                 allowed_exit_codes=[0, 1])
+    assert_eq("T-skill-create-4a: unresolved placeholder rejected",
+              vr_bad["ok"], False)
+    assert "no-unresolved-placeholders" in vr_bad["failures"], \
+        f"placeholder check should fail; got {vr_bad['failures']}"
+
+    # Case B — first-person pronoun in description
+    bad2 = sc_proj / "_bad_first_person.md"
+    bad2.write_text(
+        "---\nname: bad-fp\ndescription: Use when I want to do my work\n"
+        "user-invocable: true\nargument-hint: \"<x>\"\n---\n\n"
+        "# Bad FP\n\n"
+        "<!-- kata:generated-skill pattern=custom kata_version=test "
+        "generated_at=2026-05-20T00:00:00Z -->\n",
+        encoding="utf-8")
+    vr_bad2 = run([str(SCRIPTS / "skill_scaffold.py"), "verify", str(bad2)],
+                  allowed_exit_codes=[0, 1])
+    assert_eq("T-skill-create-4b: first-person rejected", vr_bad2["ok"], False)
+    assert "description-third-person" in vr_bad2["failures"], \
+        f"first-person check should fail; got {vr_bad2['failures']}"
+
+    # Case C — missing sentinel
+    bad3 = sc_proj / "_bad_no_sentinel.md"
+    bad3.write_text(
+        "---\nname: no-sentinel\ndescription: Use when this skill is needed\n"
+        "user-invocable: true\nargument-hint: \"<x>\"\n---\n\n"
+        "# No Sentinel\n\nBody without the kata comment.\n",
+        encoding="utf-8")
+    vr_bad3 = run([str(SCRIPTS / "skill_scaffold.py"), "verify", str(bad3)],
+                  allowed_exit_codes=[0, 1])
+    assert_eq("T-skill-create-4c: missing sentinel rejected", vr_bad3["ok"], False)
+    assert "sentinel-present" in vr_bad3["failures"], \
+        f"sentinel check should fail; got {vr_bad3['failures']}"
+
+    # Case D — bad name format (uppercase)
+    bad4 = sc_proj / "_bad_name.md"
+    bad4.write_text(
+        "---\nname: BadName\ndescription: Use when something happens\n"
+        "user-invocable: true\nargument-hint: \"<x>\"\n---\n\n"
+        "# Bad Name\n\n"
+        "<!-- kata:generated-skill pattern=custom kata_version=test "
+        "generated_at=2026-05-20T00:00:00Z -->\n",
+        encoding="utf-8")
+    vr_bad4 = run([str(SCRIPTS / "skill_scaffold.py"), "verify", str(bad4)],
+                  allowed_exit_codes=[0, 1])
+    assert_eq("T-skill-create-4d: invalid name rejected", vr_bad4["ok"], False)
+    assert "name-format-valid" in vr_bad4["failures"], \
+        f"name check should fail; got {vr_bad4['failures']}"
+    print("  ok  T-skill-create-4: verify rejects (a) unresolved placeholder, "
+          "(b) first-person description, (c) missing sentinel, (d) bad name format")
+
+    # T-skill-create-5: cross-platform path handling — explicit target dir +
+    # custom pattern with extra --var overrides.
+    custom_target = FIXTURE.parent / "_skill_create_explicit" / "my-custom" / "SKILL.md"
+    if custom_target.parent.exists():
+        _windows_safe_rmtree(custom_target.parent)
+    sc_render5 = run(
+        [str(SCRIPTS / "skill_scaffold.py"), "render",
+         "--pattern", "custom",
+         "--skill-name", "my-custom",
+         "--target", str(custom_target),
+         "--project-root", str(sc_proj),
+         "--var", "DESCRIPTION=Use when running a custom workflow for demo-app.",
+         "--var", "WHEN_TO_USE=- A custom trigger fires",
+         "--var", "WHEN_NOT_TO_USE=- The basic loop already fits",
+         "--var", "CUSTOM_STEPS=3.1 Step one\n3.2 Step two",
+         "--var", "MANUAL_VERIFICATION=Check that the dashboard updates",
+         "--var", "INGEST_PAGE_TYPE=feature",
+         "--var", "ARGUMENT_HINT=<custom-arg>"])
+    assert_eq("T-skill-create-5: target matches", sc_render5["target_path"],
+              str(custom_target))
+    assert custom_target.is_file(), \
+        f"explicit-path render must write to {custom_target}"
+    body5 = custom_target.read_text(encoding="utf-8")
+    assert "Use when running a custom workflow for demo-app." in body5, \
+        "custom DESCRIPTION should land"
+    assert "3.1 Step one" in body5, "custom CUSTOM_STEPS should land"
+    assert "page-type=feature" not in body5 or "feature" in body5, \
+        "custom INGEST_PAGE_TYPE should land"
+    vr5 = run([str(SCRIPTS / "skill_scaffold.py"), "verify", str(custom_target)])
+    assert vr5["ok"] is True, \
+        f"custom-rendered SKILL.md should verify; failures={vr5.get('failures')}"
+    print("  ok  T-skill-create-5: explicit-path target works, custom pattern "
+          "consumes --var overrides, verify passes")
+
+    # Cleanup parametric + explicit fixtures
+    _windows_safe_rmtree(sc_proj)
+    _windows_safe_rmtree(custom_target.parent)
+
     print("\nAll smoke tests passed.")
     return 0
 

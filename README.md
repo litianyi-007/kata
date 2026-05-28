@@ -28,9 +28,9 @@ Then in any project directory:
 claude /kata:wiki-init
 ```
 
-You now have 17 skills (`wiki-init`, `wiki-ingest`, `wiki-search`,
+You now have 18 skills (`wiki-init`, `wiki-ingest`, `wiki-search`,
 `wiki-graph`, `wiki-tier`, `wiki-dream`, `wiki-session-ingest`, `wiki-spec`,
-`wiki-sync`, …) operating on a fresh wiki at
+`wiki-skill-create`, `wiki-sync`, …) operating on a fresh wiki at
 `~/.llm-wiki/<your-project>/`. Detailed install options below.
 
 ## What problem this solves
@@ -70,6 +70,7 @@ dimensions, memory-tier policy).
 | **Core** | A **self-evolving knowledge system** built on the base: (1) a self-closing loop — ingest → cross-link → filed-query → compounding pages; (2) auto-dreaming — frozen pages resurface when their relevance returns. The wiki doesn't just persist; it grows back toward what's currently mattering. |
 | **Phase 1** *(current)* | **AI-paired engineering.** Use the core wiki to compile project business semantics — thresholds, lifecycle invariants, domain conventions — so AI agents read project conventions before they write code. v1.4 → v1.13 ship this reach. |
 | **Phase 1+** *(shipped — Phase 3 preview)* | **Spec History Management (v1.13).** For SDD / superpowers-style flows that accumulate specs over time. `wiki-spec preflight` makes new specs answer for the prior specs they overlap. Phases 0/2 (advisory + ingest-time enforcement, v2.4.0), Phase 4 (lineage tree view, v2.13.0), Phase 3 (auto-propagation, v2.12.0 opt-in preview). Phase 1 (external-source backfill) was tried and removed in v2.5.0; cross-wiki authoring goes through v1.12 federation. The transactional reland of Phase 3 is tracked in `docs/PRD-v1.14-spec-propagation-reconcile.md`. |
+| **Phase 1+** *(shipped)* | **Work-Loop Bridge (v1.15).** Kata's documentation loop closes (ingest → cross-link → query → file-back), but real engineering work — code search, edits, tests, verification — used to fall *outside* that loop, relying on individual discipline to re-enter. `wiki-skill-create` generates project-local skills that wrap kata's query/ingest with the project's actual work pipeline. Four MVP patterns: `issue-fix`, `feature-build`, `bug-debug`, `custom`. Consult-before / file-back-after becomes the structural default, not a discipline. See `docs/PRD-v1.15-work-loop-bridge.md`. |
 | **Phase 2** *(designed, not yet implemented)* | **Team spec authoring + dispute resolution.** A self-closing loop for spec drafts, ratified positions, and the rejected alternatives — so future decisions don't re-litigate the same questions. v1.13 is one of the substrates this rests on. |
 | **Phase 3+** | Open. The core extends to new boundaries as we learn what compounds. |
 
@@ -492,6 +493,7 @@ an uninitialized wiki; run `wiki-init` first for each project.
 | wiki-lint | `/kata:wiki-lint` | Karpathy | Structure + content + tier/dimension checks + SCHEMA.md evolution |
 | **wiki-session-ingest** | `/kata:wiki-session-ingest` | extension | Capture keeper insights from the active AI CLI session (Claude Code / Codex / others). Incremental by default — second run only picks up new messages. |
 | **wiki-spec** | `/kata:wiki-spec preflight <source>` | extension | Spec History Management — preflight scoring, ingest-time relationship enforcement, lineage tree view. For SDD / superpowers-style spec corpora. |
+| **wiki-skill-create** | `/kata:wiki-skill-create` | extension | Generate a project-local skill that bridges kata's query/ingest with this project's actual work pipeline (code edit / test / build / human verify). Four patterns: issue-fix / feature-build / bug-debug / custom. |
 
 > **Origin column**: "Karpathy" = concept described in the original; "extension" = added by this plugin. Even Karpathy-origin skills have been significantly expanded (image handling, tier filtering, external fallback, etc.)
 
@@ -1034,6 +1036,80 @@ transactional reland is tracked in
 `kata://<peer>/<path>` URIs (v1.12 federation). kata never writes to peer
 wikis — federation contract is read-only — but it records the supersession
 in a local `.spec-reverse-index.yaml` that the lineage view walks.
+
+## Wire kata into your actual work pipeline
+
+> Extension — extends kata's reach from the documentation loop into the
+> code-edit / test / verify loop. The third concrete reach into
+> AI-paired engineering, alongside spec-corpus integrity (above) and
+> session capture (below).
+
+Kata's wiki closes the documentation loop — ingest, cross-link, query,
+file-back. But the **actual work** — searching source, modifying code,
+running tests, verifying the fix — happens outside that loop. Whether
+to re-enter the wiki afterward is voluntary. The compounding effect
+that makes kata kata depends on individual discipline at exactly the
+moment when discipline is hardest to muster.
+
+`wiki-skill-create` generates a **project-local skill** that wraps
+kata's query/ingest with your project's actual work pipeline into one
+closed loop. The generated skill becomes the default entry point for
+that kind of work in that project — consult-before / file-back-after
+is now the structural shape, not a discipline you have to remember.
+
+```bash
+# Interactive: pick a pattern, name the skill, confirm placement
+/kata:wiki-skill-create
+```
+
+**Four MVP patterns** — pick the one that fits how the work in your
+project actually shapes up:
+
+| Pattern | Encoded loop |
+|---|---|
+| `issue-fix` | Problem → kata query → source search → minimal edit → test → human verify → wiki-ingest |
+| `feature-build` | Feature → kata query → spec draft → `wiki-spec preflight` → implement → verify → file back both spec AND impl learnings |
+| `bug-debug` | Bug → reproduce → kata search (by symptom AND by mechanism) → root cause → fix + regression test → file back as lesson with root cause as dominant content |
+| `custom` | Your loop description → kata wraps it with query / human-gate / file-back bookends |
+
+**What gets generated**: a SKILL.md at `<project>/.claude/skills/<your-name>/SKILL.md`
+(default; `--target codex` writes to `~/.codex/skills/` instead). The
+file is checked into your project's git repo. It encodes the 7-step
+loop using your project's detected test/build/lint commands and the
+bound kata wiki path. A sentinel comment at the bottom marks it as
+kata-generated so future tooling can find it (`<!-- kata:generated-skill ... -->`).
+
+**Discovery is automatic**:
+
+- Tech stack: `package.json` → npm scripts; `Cargo.toml` → cargo
+  commands; `pyproject.toml` → pytest; `go.mod` → `go test ./...`;
+  multi-stack projects keep the full list
+- Project name: pulled from the manifest (`package.json.name`,
+  `[package].name` in Cargo.toml, `module` line in go.mod), falling
+  back to git root directory name
+- Kata wiki binding: same `find_wiki_root()` resolution as every
+  other kata skill — automatic if a wiki is bound, placeholder
+  otherwise
+
+**The 9 verification checks** (run after every render):
+frontmatter parses; required fields present; name format
+`^[a-z][a-z0-9-]*$`; ≤ 1024 chars of frontmatter; description starts
+with "Use when"; third-person only (no `I/we/my/our`); sentinel
+comment present; no unresolved `{{VAR}}`; argument-hint present when
+user-invocable. Failures don't auto-fix — the user sees what's wrong
+and chooses whether to regenerate.
+
+**Customization after generation**: the SKILL.md is yours. Edit it as
+your project's work shape evolves — add a deploy phase, swap
+`wiki-ingest` for `wiki-session-ingest`, adjust kata search strategy.
+The sentinel comment is the only machine-managed part. Future kata
+versions will add a `--update <name>` workflow (v1.16) that preserves
+your customizations.
+
+See [`docs/PRD-v1.15-work-loop-bridge.md`](docs/PRD-v1.15-work-loop-bridge.md)
+for the full design, including rationale for each pattern and the
+strategic positioning of the work-loop bridge alongside spec-history
+management (v1.13) and session ingest (v1.11).
 
 ## Auto-ingest from raw/ (the watcher)
 
