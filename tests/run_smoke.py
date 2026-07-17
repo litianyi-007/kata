@@ -278,6 +278,23 @@ def assert_ge(name, got, threshold):
     print(f"  ok  {name} = {got} (>= {threshold})")
 
 
+def _read_skill_md_version(path: Path) -> str:
+    """Extract the `version:` field from a SKILL.md's YAML frontmatter.
+
+    Deliberately regex-based, not a YAML parse: root SKILL.md is a
+    standalone single-file protocol doc meant to be pasted whole into any
+    LLM, so this check must not gain a PyYAML dependency just to read one
+    scalar out of the fenced `---`/`---` block at the top of the file.
+    """
+    text = path.read_text(encoding="utf-8")
+    fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
+    assert fm_match, f"no YAML frontmatter block found at top of {path}"
+    version_match = re.search(r"^version:\s*([^\s#]+)\s*$",
+                               fm_match.group(1), re.MULTILINE)
+    assert version_match, f"no 'version:' field in frontmatter of {path}"
+    return version_match.group(1).strip()
+
+
 def resolve_wiki_root(cwd: Path, env: dict[str, str]) -> Path:
     proc = subprocess.run(
         [sys.executable, "-c",
@@ -4390,6 +4407,33 @@ print(json.dumps({{
     _windows_safe_rmtree(doc_proj)
     _windows_safe_rmtree(sc_proj)
     _windows_safe_rmtree(custom_target.parent)
+
+    print("\nTest 62: version consistency guard (root SKILL.md + 3 plugin manifests)")
+    # Regression test for the v2.15.3 fix: root SKILL.md's frontmatter
+    # `version:` sat at 2.13.0 for two releases while the three plugin
+    # manifests advanced to 2.15.2 — a single-point drift no test caught.
+    skill_md_version = _read_skill_md_version(ROOT / "SKILL.md")
+    plugin_manifest = json.loads(
+        (ROOT / "plugin" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    marketplace = json.loads(
+        (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    root_plugin_manifest = json.loads(
+        (ROOT / "plugin.json").read_text(encoding="utf-8"))
+    kata_entry = next(p for p in marketplace["plugins"] if p["name"] == "kata")
+
+    versions = {
+        "SKILL.md (frontmatter version)": skill_md_version,
+        "plugin/.claude-plugin/plugin.json (version)": plugin_manifest["version"],
+        ".claude-plugin/marketplace.json (plugins[kata].version)": kata_entry["version"],
+        "plugin.json (root, Copilot manifest, version)": root_plugin_manifest["version"],
+    }
+    distinct = set(versions.values())
+    assert len(distinct) == 1, (
+        "version drift across kata manifests — expected all 4 sources to "
+        "match but got: " + ", ".join(f"{k}={v!r}" for k, v in versions.items())
+    )
+    print(f"  ok  all 4 version sources agree on {distinct.pop()!r}: "
+          + ", ".join(versions.keys()))
 
     print("\nAll smoke tests passed.")
     return 0

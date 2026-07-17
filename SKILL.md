@@ -1,7 +1,7 @@
 ---
 name: kata
 description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 18 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server / federate / skill-create). **v1.13 SHM complete (Phase 0+2+3+4)**. **v1.15 work-loop bridge**: `wiki-skill-create` generates project-local skills wrapping kata's query/ingest with the project's actual work pipeline (issue-fix / feature-build / bug-debug / custom patterns); closes consult-before / file-back-after as structural default rather than discipline."
-version: 2.13.0
+version: 2.15.3
 author: surebeli
 license: MIT
 ---
@@ -598,6 +598,10 @@ spec_relationships:
     target: decisions/F011-merge-back.md
 ```
 
+`target` accepts a path relative to the wiki root, `[[wikilink]]`, bare
+stem, or `kata://<peer>/<path>` federation URI — **absolute paths and
+`..` segments are rejected** (path-traversal guard, hardened v2.13.1).
+
 See `plugin/skills/wiki-spec/SKILL.md` for the full per-phase contract and
 `docs/PRD-v1.13-spec-history-management.md` (forthcoming) for design.
 
@@ -606,7 +610,7 @@ See `plugin/skills/wiki-spec/SKILL.md` for the full per-phase contract and
 ### wiki-skill-create (work-loop bridge — v1.15)
 **Trigger:** "wire kata into this project's workflow", "create a project-local skill", "generate a fix-loop / feature-loop / debug-loop skill"
 
-**Arguments:** `[--pattern <issue-fix|feature-build|bug-debug|custom>]`, `[--name <kebab>]`, `[--target <claude-code|codex|wiki>]`, `[--no-ingest-after]`
+**Arguments:** `[--pattern <issue-fix|feature-build|bug-debug|custom>]`, `[--supplement-action <source-search|web-search|doc-lookup|custom>]`, `[--name <kebab>]`, `[--target <claude-code|codex|wiki>]`, `[--no-ingest-after]`
 
 Generates a **project-local skill** that wraps kata's documentation loop
 (search / query / ingest) with the project's actual work pipeline (code
@@ -623,6 +627,18 @@ file-back-after becomes structural, not a discipline.
   symptom AND mechanism, files back lesson with root cause dominant
 - `custom` — escape hatch; user describes the middle phases, kata wraps
   with query / human-gate / file-back bookends
+
+**Supplement-action catalog (v2.15.1):** each pattern's "verify against
+prior art" phase is parameterized, not hardcoded to a code repo —
+`--supplement-action source-search` (Grep/Glob/Read, default),
+`web-search` (WebSearch + WebFetch, for research/materials wikis),
+`doc-lookup` (local `docs/` + authoritative external doc sites), or
+`custom` (`{{CUSTOM_SUPPLEMENT_*}}` placeholders for a user-described
+action). Each snippet self-encodes the hit/miss escalation: a Step 2
+kata-wiki hit means verification mode; a miss means primary-discovery
+mode and makes the file-back in the final phase higher-value.
+`discover` suggests one based on detected tech-stack signals; the
+orchestrator's Phase 2.5 asks the user to confirm or override.
 
 **Discovery (automatic before render):**
 - Project root + git root + project name (from `package.json.name`,
