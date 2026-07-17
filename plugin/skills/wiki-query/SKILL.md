@@ -265,7 +265,7 @@ If the local wiki doesn't have enough coverage, `wiki-query` can delegate to
        --wiki {wiki_path} --plugin <name> --query "<question>"
    ```
 
-   The script: validates the plugin entry against `schema/wiki-schema.json`,
+   The script: validates the plugin entry against `plugin/schema/wiki-schema.json`,
    renders argv tokens with `{query}` / `{wiki_path}` / `{date}` / `vars.*`,
    refuses any token containing shell metachars after substitution, and (by
    default) returns a `mode: "preview"` payload with the rendered argv for

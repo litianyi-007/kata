@@ -1,7 +1,7 @@
 ---
 name: kata
 description: "Kata — a self-evolving knowledge system for AI-paired builders. CORE: self-closing wiki loop + auto-dreaming on Karpathy's LLM-Wiki principle. Phase 1 (current): AI-paired engineering — compile project business semantics so agents read project conventions before they write code. Phase 2 (designed): team spec authoring + dispute resolution. 18 skills (init / import / ingest / search / graph / tier / digest / query / lint / config / dream / watch / sync / spec / session-ingest / mcp-server / federate / skill-create). **v1.13 SHM complete (Phase 0+2+3+4)**. **v1.15 work-loop bridge**: `wiki-skill-create` generates project-local skills wrapping kata's query/ingest with the project's actual work pipeline (issue-fix / feature-build / bug-debug / custom patterns); closes consult-before / file-back-after as structural default rather than discipline."
-version: 2.15.3
+version: 2.15.4
 author: surebeli
 license: MIT
 ---
@@ -604,6 +604,120 @@ stem, or `kata://<peer>/<path>` federation URI — **absolute paths and
 
 See `plugin/skills/wiki-spec/SKILL.md` for the full per-phase contract and
 `docs/PRD-v1.13-spec-history-management.md` (forthcoming) for design.
+
+---
+
+### wiki-session-ingest (capture conversation-born knowledge — v1.11+)
+**Trigger:** "capture what we just figured out", "distill this session into the wiki", "what did I learn today that isn't written down"
+
+**Arguments:** `--session-id <id>`, `--session-file <path>`, `--cli <name>`,
+`--max-tool-output-lines N`, `--full`, `--auto-trigger`
+
+The other ingest skills handle artifacts — URLs, files, pasted text. This
+one handles **the conversation itself**. The reasoning trail from a long
+debug / design session compounds the same way a source does, if someone
+writes it down before it's forgotten.
+
+**Standalone adaptation:** the plugin ships a JSONL adapter that parses
+Claude Code / Codex CLI transcript files directly and tracks a persistent
+state file for incremental re-dumps across repeated calls. None of that
+exists standalone — no adapter, no state file. Standalone mode always
+follows the plugin's own manual fallback path (its answer for CLIs
+without an adapter): you, the agent, write the summary yourself.
+
+1. **Orient** — read SCHEMA.md, index.md, recent log.md
+2. **Write the raw dump yourself** — summarize the conversation under four
+   headings: `User questions`, `Decisions`, `Outcomes`, `Detailed
+   turn-by-turn` (concise — enough to extract knowledge points from, not a
+   verbatim transcript). Save to `raw/sessions/{context}-{date}-{slug}.md`.
+   Every standalone run is a fresh, full write — there's no state file to
+   make it incremental
+3. **Extract knowledge-point candidates** — scan the dump plus index.md for
+   confidently-answered questions, approved/rejected design proposals,
+   diagnosed bugs with root cause, executed runbook steps, schema
+   decisions. Filter out housekeeping and unresolved threads. Reject a
+   candidate unless it can point to at least two distinct parts of the
+   conversation backing it (hallucination guard) — cite specifics
+4. **Multi-select with the user** — present up to 8 ranked candidates, ask
+   which to keep; selecting none is a valid, zero-write outcome
+5. **Distill selected candidates** — run each through the `wiki-ingest`
+   steps above (SCHEMA.md-conformant page type, cross-links, index.md /
+   log.md updates)
+
+**Not available standalone:** CLI auto-detection (environment-variable and
+transcript-path probing), the JSONL parse-and-render pipeline, and
+incremental re-dump tracking are all adapter-script machinery with no
+manual equivalent worth approximating — every standalone run is treated as
+one full, hand-authored dump instead.
+
+See `plugin/skills/wiki-session-ingest/SKILL.md` for the full adapter and
+incremental-state contract.
+
+---
+
+### wiki-mcp-server (MCP server — plugin-only, not available standalone)
+**Trigger:** "expose this wiki over MCP", "let Cursor/Continue query my wiki", "run the wiki as an MCP server"
+
+**Arguments:** `--wiki=<path>`, `--transport=stdio`
+
+In the plugin, this runs the wiki as a stdio JSON-RPC MCP server so any
+MCP-aware client (Claude Code, Cursor, Continue, or another kata acting as
+a federation client) can call read-only tools against it directly:
+`wiki-search`, `wiki-graph` (read subset), `wiki-spec-preflight` (advisory
+candidates only). Write skills are never exposed across the MCP boundary.
+
+**Not available in standalone form.** This skill's entire job is being a
+long-lived process that a client spawns over stdio and holds a JSON-RPC
+session with. A standalone protocol paste is static text living inside
+someone else's context — it cannot host a subprocess, accept a client
+handshake, or stay resident between calls. There is no manual degradation
+that preserves this behavior: either the real process is running, or the
+capability doesn't exist here.
+
+If another agent needs to query this wiki and installing the real kata
+plugin isn't an option, give that agent direct file-read access to the
+wiki directory (or a copy) plus this same document — it can then run the
+`wiki-search` / `wiki-graph` steps above directly against the files. Same
+read-only outcome, no MCP transport involved.
+
+See `plugin/skills/wiki-mcp-server/SKILL.md` for the protocol surface, the
+safety contract, and how to actually run the server.
+
+---
+
+### wiki-federate (cross-wiki federation — degrades to manual peer reads standalone)
+**Trigger:** "check if other wikis have something on this", "query the federated wikis", "resolve this kata:// citation"
+
+**Arguments:** `search <query> [--wiki=<path>] [--limit=10]
+[--peers=name1,name2] [--no-federate]`, `peers [--wiki=<path>]`,
+`resolve <kata://uri> [--wiki=<path>]`
+
+In the plugin, this fans a query out to peer kata wikis listed in
+`{wiki_path}/.federation.yaml`, spawning each peer's `wiki-mcp-server` as
+a subprocess, verifying the peer's `wiki_id` before trusting it, and
+merging ranked results with `kata://<peer>/<path>` provenance.
+
+**Not available live, standalone.** Fan-out depends on peer
+`wiki-mcp-server` processes actually running (plugin-only, see above) and
+a client script to spawn and query them — neither exists here.
+
+**Manual analog, if you have it:** when you (the agent) have direct
+file-read access to a second wiki's directory — not via MCP, just a folder
+you can read — you can reproduce the spirit of federation by hand: read
+the peer's SCHEMA.md and confirm its `wiki_id` matches what you expect
+(same identity-check discipline as the live version), run the
+`wiki-search` steps above against the peer's files instead of your own,
+and cite anything you use as `kata://<peer-name>/<path relative to the
+peer's wiki root>` so provenance survives without the live protocol.
+Ranking and merging across wikis is then a judgment call, not an
+automatic score.
+
+Without either a running peer server or direct file access to one,
+there's nothing to federate against — say so rather than guessing.
+
+See `plugin/skills/wiki-federate/SKILL.md` for the peer-registry format,
+identity-check contract, and failure-mode table the live version
+implements.
 
 ---
 

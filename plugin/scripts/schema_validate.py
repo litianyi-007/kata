@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a wiki's SCHEMA.md against schema/wiki-schema.json.
+"""Validate a wiki's SCHEMA.md against plugin/schema/wiki-schema.json.
 
 Pure stdlib — implements the subset of JSON Schema that wiki-schema.json uses
 (type, enum, required, pattern, minimum, additionalProperties, items, allOf,
@@ -21,7 +21,18 @@ from pathlib import Path
 
 from wiki_lib import emit, find_wiki_root, load_schema, _parse_yaml_block
 
-SCHEMA_FILE = Path(__file__).resolve().parents[2] / "schema" / "wiki-schema.json"
+# Resolved *within the plugin tree* (parents[1] = plugin/, from
+# plugin/scripts/schema_validate.py) — NOT parents[2] (repo root). Marketplace
+# installs package only `source="./plugin"` (see .claude-plugin/marketplace.json),
+# so anything outside plugin/ never reaches ~/.claude/plugins/cache/kata/kata/<ver>/.
+# Before this fix, SCHEMA_FILE pointed at parents[2]/"schema"/... (the repo-root
+# schema/ dir), which worked in a dev checkout (repo root two levels up) but
+# resolved to a nonexistent path once installed from the marketplace (two
+# levels up from the *installed* script is the plugin-cache's `kata/` owner
+# dir, not the repo root) — schema_validate.py crashed with FileNotFoundError
+# for every installed user. Moving wiki-schema.json into plugin/schema/ makes
+# it single-sourced and always packaged alongside the script that reads it.
+SCHEMA_FILE = Path(__file__).resolve().parents[1] / "schema" / "wiki-schema.json"
 
 
 class ValidationError(Exception):

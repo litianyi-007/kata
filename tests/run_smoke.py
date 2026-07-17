@@ -4435,6 +4435,146 @@ print(json.dumps({{
     print(f"  ok  all 4 version sources agree on {distinct.pop()!r}: "
           + ", ".join(versions.keys()))
 
+    print("\nTest 63: schema packaging — single-source plugin/schema/"
+          "wiki-schema.json + simulated marketplace-install layout")
+    # Regression test for a real installed-cache defect: schema_validate.py's
+    # SCHEMA_FILE used to resolve via `Path(__file__).resolve().parents[2]`
+    # (i.e. the *repo root*'s schema/wiki-schema.json). That only works in a
+    # dev checkout, where parents[2] from plugin/scripts/schema_validate.py
+    # is the kata repo root. marketplace.json packages `source: "./plugin"`
+    # — nothing outside plugin/ is ever shipped — so every installed user's
+    # cache at ~/.claude/plugins/cache/kata/kata/<version>/scripts/
+    # schema_validate.py crashed with FileNotFoundError on every invocation
+    # (parents[2] from the *installed* script path lands on the plugin
+    # cache's `kata/` owner dir, not a repo root, and has no schema/ child
+    # at all). Fixed by moving wiki-schema.json into plugin/schema/ (single
+    # source of truth, always packaged with the script that reads it) and
+    # re-pointing SCHEMA_FILE at parents[1] (plugin/) instead of parents[2].
+    #
+    # T-pkg-1: single source of truth — the old repo-root location must
+    # never come back (that would recreate exactly the dual-source drift
+    # this fix eliminated).
+    assert (ROOT / "plugin" / "schema" / "wiki-schema.json").exists(), \
+        "plugin/schema/wiki-schema.json must exist — it's the sole packaged " \
+        "copy of the schema now"
+    assert not (ROOT / "schema").exists(), \
+        "repo-root schema/ must not exist. wiki-schema.json has exactly one " \
+        "source of truth at plugin/schema/wiki-schema.json; a reintroduced " \
+        "repo-root schema/ dir is the dual-source-of-truth bug this fix " \
+        "removed, and would silently drift from the packaged copy again."
+    print("  ok  T-pkg-1: plugin/schema/wiki-schema.json is the sole copy "
+          "(repo-root schema/ does not exist)")
+
+    # T-pkg-2: simulate the *installed* marketplace layout — copy plugin/'s
+    # contents to a scratch dir standing in for
+    # ~/.claude/plugins/cache/kata/kata/<version>/ (marketplace flattens
+    # `source: "./plugin"` to become the package root), then invoke
+    # schema_validate.py from inside the copy exactly as an installed skill
+    # would shell out to it. Before the fix this raised FileNotFoundError;
+    # after the fix it must run clean.
+    import shutil as _sh
+    pkg_sim = FIXTURE.parent / "_pkg_sim"
+    if pkg_sim.exists():
+        _windows_safe_rmtree(pkg_sim)
+    _sh.copytree(ROOT / "plugin", pkg_sim)
+    sim_payload = run([str(pkg_sim / "scripts" / "schema_validate.py"),
+                        "--wiki", str(FIXTURE)])
+    assert sim_payload["valid"] is True, (
+        f"schema_validate.py should validate cleanly from a copied plugin/ "
+        f"tree (simulated marketplace-install layout), got: {sim_payload}")
+    _windows_safe_rmtree(pkg_sim)
+    print("  ok  T-pkg-2: schema_validate.py runs clean (valid=True) from a "
+          "copied plugin/ tree standing in for the marketplace-installed "
+          "cache layout — this exact invocation raised FileNotFoundError "
+          "before the fix")
+
+    print("\nTest 64: orphan detection exempts structural/meta files "
+          "(SCHEMA.md/index.md/log.md + dreaming/*.md)")
+    # Regression test for a real defect: graph_query.py --mode orphans
+    # counted SCHEMA.md, index.md, and log.md as "true orphans" on every
+    # wiki — reproduced against tests/fixture before the fix: true_orphans
+    # was ["SCHEMA.md", "log.md", "index.md", "concepts/isolated-concept.md",
+    # "entities/orphan-page.md"] (5 entries) instead of just the 2 genuine
+    # orphans. Fixed via wiki_lib.is_structural_page().
+    orphans_64 = run([str(SCRIPTS / "graph_query.py"),
+                       "--wiki", str(FIXTURE), "--mode", "orphans"])
+    for structural in ("SCHEMA.md", "index.md", "log.md"):
+        assert structural not in orphans_64["true_orphans"], (
+            f"{structural} must be exempt from orphan detection, got "
+            f"true_orphans={orphans_64['true_orphans']}")
+    assert_eq("T-orphan-struct-1: true_orphans (structural files excluded)",
+              sorted(orphans_64["true_orphans"]),
+              sorted(["concepts/isolated-concept.md", "entities/orphan-page.md"]))
+    print("  ok  T-orphan-struct-1: SCHEMA.md/index.md/log.md excluded from "
+          "true_orphans; the 2 genuine orphan pages are still detected")
+
+    # T-orphan-struct-2: a candidate-less dreaming/*.md digest (the normal
+    # shape of a dreaming run that found nothing to resurface — zero
+    # [[wikilinks]], zero inbound links) must not be misreported as an
+    # orphan either, since it's an auto-generated run report, not content.
+    dream_wiki = FIXTURE.parent / "_orphan_dreaming"
+    if dream_wiki.exists():
+        _windows_safe_rmtree(dream_wiki)
+    (dream_wiki / "dreaming").mkdir(parents=True)
+    (dream_wiki / "SCHEMA.md").write_text("# Schema\n", encoding="utf-8")
+    (dream_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (dream_wiki / "log.md").write_text("# Log\n", encoding="utf-8")
+    (dream_wiki / "dreaming" / "2026-07-18.md").write_text(
+        "# Dreaming run · 2026-07-18\n\n"
+        "- Candidate pool: 0 (archived + frozen)\n\n"
+        "## Candidates (0)\n\n"
+        "_No frozen/archived pages crossed the threshold this run._\n",
+        encoding="utf-8")
+    orphans_dream = run([str(SCRIPTS / "graph_query.py"),
+                          "--wiki", str(dream_wiki), "--mode", "orphans"])
+    assert_eq("T-orphan-struct-2: candidate-less dreaming digest excluded "
+              "from true_orphans",
+              orphans_dream["true_orphans"], [])
+    _windows_safe_rmtree(dream_wiki)
+    print("  ok  T-orphan-struct-2: candidate-less dreaming/*.md digest "
+          "excluded from true_orphans (dreaming digests with real "
+          "[[candidate]] citations still resolve/build edges normally — "
+          "see tests/_prop_dreamer coverage in Test 42-46, unaffected by "
+          "this exemption since it only applies to orphan classification, "
+          "not wikilink-body parsing)")
+
+    print("\nTest 65: dangling-link detection ignores literal [[wikilink]] "
+          "syntax examples inside structural files")
+    # Regression test for a real defect reproduced against a live wiki (not
+    # just a synthetic fixture): a log.md entry describing cross-references
+    # in prose — "Cross-references: 38 对 [[wikilink]]，全部核对为双向" — was
+    # parsed by extract_links() as a real outbound link to a page literally
+    # titled "wikilink", which doesn't exist, so it was reported as a
+    # dangling link: `dangling_links: {'log.md': ['wikilink']}`. Fixed by
+    # skipping extract_links() entirely for SCHEMA.md/index.md/log.md in
+    # discover_pages() (see wiki_lib.STRUCTURAL_FILENAMES) — their body is
+    # bookkeeping/prose, never a real wikilink-graph source.
+    dangling_wiki = FIXTURE.parent / "_dangling_structural"
+    if dangling_wiki.exists():
+        _windows_safe_rmtree(dangling_wiki)
+    dangling_wiki.mkdir(parents=True)
+    (dangling_wiki / "SCHEMA.md").write_text("# Schema\n", encoding="utf-8")
+    (dangling_wiki / "index.md").write_text("# Index\n", encoding="utf-8")
+    (dangling_wiki / "log.md").write_text(
+        "# Wiki Log\n\n"
+        "> Append-only chronological action log.\n"
+        "> Format: ## [YYYY-MM-DD] action | subject\n\n"
+        "## [2026-07-17] ingest | example entry\n"
+        "- Cross-references: 38 pairs of [[wikilink]], all verified bidirectional\n",
+        encoding="utf-8")
+    orphans_65 = run([str(SCRIPTS / "graph_query.py"),
+                       "--wiki", str(dangling_wiki), "--mode", "orphans"])
+    assert orphans_65["dangling_links"] == {}, (
+        f"log.md's literal '[[wikilink]]' syntax example must not be "
+        f"treated as a dangling link, got: {orphans_65['dangling_links']}")
+    assert "log.md" not in orphans_65["true_orphans"], orphans_65["true_orphans"]
+    _windows_safe_rmtree(dangling_wiki)
+    print("  ok  T-dangling-struct-1: log.md prose mentioning the literal "
+          "'[[wikilink]]' syntax (as a real log.md entry does, e.g. "
+          "'38 pairs of [[wikilink]]') produces no dangling_links entry — "
+          "reproduced against ~/.llm-wiki/test-harnessloop before the fix "
+          "(dangling_links: {'log.md': ['wikilink']})")
+
     print("\nAll smoke tests passed.")
     return 0
 

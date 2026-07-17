@@ -51,7 +51,7 @@ Available templates:
 
 The script writes `SCHEMA.md`, `index.md`, `log.md`, all category dirs,
 and the `raw/{articles,papers,transcripts,assets}/` layout. Validates
-the resulting SCHEMA.md against `schema/wiki-schema.json` before
+the resulting SCHEMA.md against `plugin/schema/wiki-schema.json` before
 exiting. No LLM involvement.
 
 | Flag | Default if `--non-interactive` and unset | Effect |

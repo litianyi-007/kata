@@ -12,7 +12,7 @@ Usage:
 
 Behavior:
 1. Load .wiki-plugins.yaml
-2. Validate the plugin entry against schema/wiki-schema.json
+2. Validate the plugin entry against plugin/schema/wiki-schema.json
 3. Render argv tokens with {query}, {wiki_path}, {date}, vars.*
 4. Block any token containing shell metachars (defense-in-depth even though
    we don't shell out)

@@ -36,7 +36,7 @@ cd "$REPO_ROOT"
 # this commit. Stage 0 (compliance + author identity) ALWAYS runs — it
 # only inspects staged content + the git identity, both of which can
 # leak corp data regardless of which files changed.
-RELEVANT_PATHS='^(plugin/scripts/|plugin/skills/|schema/|tests/|scripts/|SKILL\.md$|CHANGELOG\.md$)'
+RELEVANT_PATHS='^(plugin/scripts/|plugin/skills/|plugin/schema/|tests/|scripts/|SKILL\.md$|CHANGELOG\.md$)'
 if git diff --cached --name-only | grep -qE "$RELEVANT_PATHS"; then
     RUN_HEAVY_CHECKS=1
 else

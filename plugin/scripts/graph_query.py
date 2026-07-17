@@ -27,6 +27,7 @@ from wiki_lib import (
     emit,
     find_wiki_root,
     hub_score,
+    is_structural_page,
     load_schema,
     neighbors as bfs_neighbors,
     shortest_path,
@@ -140,9 +141,18 @@ def main() -> int:
         return 0
 
     if args.mode == "orphans":
+        # Structural/meta files (SCHEMA.md, index.md, log.md, dreaming/*.md)
+        # are never "content pages" — they're bookkeeping or auto-generated
+        # run reports that legitimately have zero real graph edges (e.g. a
+        # candidate-less dreaming digest, or a bookkeeping file nothing is
+        # meant to cite). Without this exemption every wiki reports them as
+        # orphans/leaves unconditionally, which is noise, not a real finding.
+        # See wiki_lib.is_structural_page() for the full rationale.
         true_orphans = [p.path for p in pages
-                        if not p.in_links and not p.out_links]
-        leaves = [p.path for p in pages if p.in_links and not p.out_links]
+                        if not p.in_links and not p.out_links
+                        and not is_structural_page(p.path)]
+        leaves = [p.path for p in pages if p.in_links and not p.out_links
+                  and not is_structural_page(p.path)]
         emit({
             "mode": "orphans",
             "true_orphans": filter_by_tier(true_orphans),

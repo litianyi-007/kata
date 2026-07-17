@@ -4,6 +4,151 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.15.4] — 2026-07-18 — installed-plugin schema packaging fix + orphan/dangling-link false positives on structural files
+
+Patch release (no manifest or skill-API surface changed — three bug fixes to
+existing behavior plus a standalone-doc completeness pass; see "Why patch,
+not minor" below).
+
+### Fixed
+
+- **Installed-plugin `schema_validate.py` crashed with `FileNotFoundError`
+  on every invocation** (the headline defect this release closes). The
+  script located its JSON Schema via
+  `SCHEMA_FILE = Path(__file__).resolve().parents[2] / "schema" / "wiki-schema.json"`
+  — two levels up from `plugin/scripts/schema_validate.py` lands on the kata
+  repo root in a dev checkout, where `schema/wiki-schema.json` did live. But
+  `.claude-plugin/marketplace.json` packages `source: "./plugin"` — nothing
+  outside `plugin/` is ever shipped to
+  `~/.claude/plugins/cache/kata/kata/<version>/`. From the *installed*
+  script, `parents[2]` lands on the plugin-cache's `kata/` owner directory,
+  which has no `schema/` child at all, so every installed user's
+  `wiki-init`, `wiki-query` (external-plugin validation), and direct
+  `schema_validate.py --wiki` invocation crashed. Reproduced by copying the
+  installed cache layout (`plugin/` copied to a scratch dir, `scripts/
+  schema_validate.py --wiki <wiki>` run from inside it) — confirmed the
+  exact `FileNotFoundError: .../kata/kata/schema/wiki-schema.json` failure
+  before the fix.
+
+  **Fix** (single source of truth, no dual-source fallback): moved
+  `schema/wiki-schema.json` → `plugin/schema/wiki-schema.json` so the
+  schema is always packaged alongside the script that reads it, and
+  re-pointed `SCHEMA_FILE` at `parents[1]` (`plugin/`) instead of
+  `parents[2]`. The old repo-root `schema/` directory no longer exists —
+  reintroducing it would recreate the same dual-source drift this fix
+  removes, and is now guarded by Test 63 (`schema/` must not exist). Every
+  other live reference to the old path was updated to match: `plugin/
+  scripts/external_plugin_run.py`'s docstring, `plugin/skills/wiki-init/
+  SKILL.md` and `plugin/skills/wiki-query/SKILL.md`'s prose,
+  `.github/workflows/test.yml` (both `paths:` triggers and the
+  `schema-check` job's `json.load(open(...))` call), and `.githooks/
+  pre-commit`'s `RELEVANT_PATHS` regex. Historical mentions in
+  CHANGELOG.md and dated PRD/TRD design docs (`docs/TRD-v1.6-*.md`,
+  `docs/PRD-v1.13-*.md`) were left as-is — they're point-in-time records
+  of what was true when written, not living reference docs.
+
+- **`wiki-graph --mode orphans` counted bookkeeping files as content
+  orphans** on every single wiki. `SCHEMA.md`, `index.md`, and `log.md`
+  never receive an inbound `[[wikilink]]` from a content page (nothing is
+  supposed to cite a bookkeeping file), so `true_orphans` always included
+  all three regardless of the wiki's actual health — reproduced against
+  `tests/fixture`: `true_orphans` was `["SCHEMA.md", "log.md", "index.md",
+  "concepts/isolated-concept.md", "entities/orphan-page.md"]` (5 entries)
+  instead of the 2 genuine orphans. The same false positive hit
+  candidate-less `dreaming/*.md` digests (an auto-generated dreaming run
+  that found nothing to resurface has zero `[[wikilinks]]` and zero
+  inbound links — also misreported as an orphan).
+
+  **Fix**: added `wiki_lib.is_structural_page()` — a single module-level
+  exemption (`STRUCTURAL_FILENAMES = {"SCHEMA.md", "index.md", "log.md"}`,
+  `STRUCTURAL_DIR_PREFIXES = ("dreaming/",)`) — and excluded matching pages
+  from both `true_orphans` and `leaves` in `graph_query.py`'s orphans mode.
+  `raw/` and `_archive/` needed no entry: `discover_pages()`'s `skip_dirs`
+  already excludes them from the walk entirely, so nothing under them ever
+  becomes a `Page` in the first place — checked, not reproducible.
+  Dreaming digests that *do* cite real candidate pages (the normal case)
+  are unaffected — the exemption only changes orphan/leaf classification,
+  not whether a page's real `[[wikilinks]]` resolve.
+
+- **`wiki-graph --mode orphans` reported literal `[[wikilink]]` syntax
+  examples inside `log.md` as dangling links.** Reproduced against a real
+  wiki (not just a synthetic fixture): a `log.md` entry describing its own
+  cross-reference count in prose — "Cross-references: 38 对
+  `[[wikilink]]`，全部核对为双向" — was parsed by `extract_links()` as a
+  real outbound link to a page literally titled "wikilink", which doesn't
+  exist, and reported as `dangling_links: {'log.md': ['wikilink']}`.
+
+  **Fix** (chosen over the alternative — see rationale below):
+  `discover_pages()` now skips `extract_links()` entirely for the three
+  `STRUCTURAL_FILENAMES` — their body is bookkeeping prose, never a real
+  wikilink-graph source, so `out_links` is set to `[]` directly instead of
+  being parsed. This piggybacks on the same exemption list added for the
+  orphans fix above (one source of truth for "these files aren't content
+  pages"), and as a side effect also fixes the dangling-link false
+  positive by construction (no parsing → no spurious unresolved targets).
+  **Tradeoff considered**: a more general fix — stripping fenced code
+  blocks / inline code spans from `extract_links()`'s input before
+  matching `[[...]]` — would also catch a *content* page that
+  demonstrates the `[[wikilink]]` syntax inside a code span, which this
+  narrower fix does not. That was rejected for this release: it touches
+  the shared `extract_links()` path used by every content page (higher
+  blast radius for zero currently-reproduced content-page cases), while
+  every reproduced instance of this bug was in a structural file. Left as
+  a documented option if a content-page instance of this bug ever
+  surfaces.
+
+- **Root SKILL.md structural gap** (flagged as out-of-scope in 2.15.3's
+  Notes) — `wiki-session-ingest`, `wiki-mcp-server`, and `wiki-federate`
+  have had only a frontmatter mention plus the autogenerated skill table
+  in the standalone protocol text since each shipped, no narrative
+  section. Closed by adding one `###` section per skill, each stating
+  plainly how it degrades in a standalone (no-plugin-runtime) context
+  rather than glossing over it: **session-ingest** falls back to a
+  manual, non-incremental dump; **mcp-server** is plugin/runtime-only (a
+  static prompt can't host a stdio server process, so there's no manual
+  equivalent — the section points to an alternative instead); **federate**'s
+  live peer fan-out degrades to manually reading the same source when you
+  already have direct file access to the peer wiki. `scripts/
+  build_skill_md.py --check` passes.
+
+### Added
+
+- **Regression tests** (`tests/run_smoke.py`):
+  - **Test 63** — schema packaging: asserts `plugin/schema/
+    wiki-schema.json` exists and repo-root `schema/` does not (single-
+    source guard), then copies `plugin/` to a scratch dir standing in for
+    the marketplace-installed cache layout and runs `schema_validate.py
+    --wiki` from inside it, asserting a clean `valid: true` — this exact
+    invocation raised `FileNotFoundError` before the fix.
+  - **Test 64** — asserts `SCHEMA.md`/`index.md`/`log.md` are excluded
+    from `true_orphans` against `tests/fixture` (while the 2 genuine
+    orphans are still detected), and that a candidate-less
+    `dreaming/*.md` digest built in an ad hoc scratch wiki is likewise
+    excluded.
+  - **Test 65** — builds a scratch wiki whose `log.md` contains a literal
+    `[[wikilink]]` prose example (mirroring the real reproduction) and
+    asserts `dangling_links` comes back empty.
+  - All three were verified to actually fail when the corresponding fix is
+    reverted (sabotage-tested manually against each change in isolation;
+    reverting the schema-packaging fix alone breaks much earlier, at
+    Test 7, since `schema_validate.py` is exercised pervasively throughout
+    the suite — confirming the fix is load-bearing well beyond the new
+    tests).
+
+### Why patch, not minor
+
+All four fixes correct existing behavior/documentation back to what the
+plugin already intended (schema_validate.py was always supposed to
+validate; orphans/dangling-links were always supposed to report genuine
+content-graph issues; the three skills' standalone sections were always
+supposed to exist) — no new skill, no new CLI flag, no manifest field, no
+change to any skill's documented argument surface. That matches the `.1`-suffix
+precedent already set by 2.15.1 (catalog addition to an existing flag),
+2.15.2 (compat fix), and 2.15.3 itself (doc-drift sync + a new smoke
+test) — all patch releases despite non-trivial content. A minor bump is
+reserved for new skill-facing capability (e.g. 2.15.0's work-loop bridge,
+2.14.0's incremental session-ingest mode); this release adds none.
+
 ## [2.15.3] — 2026-05-21 — root SKILL.md version drift fix + version-consistency guard
 
 Root SKILL.md's frontmatter (the standalone, single-file protocol entry

@@ -6,7 +6,7 @@ on:
     paths:
       - "**.py"
       - "**.md"
-      - "schema/**"
+      - "plugin/schema/**"
       - "plugin/scripts/**"
       - "plugin/skills/**"
       - "tests/**"
@@ -16,7 +16,7 @@ on:
     paths:
       - "**.py"
       - "**.md"
-      - "schema/**"
+      - "plugin/schema/**"
       - "plugin/scripts/**"
       - "plugin/skills/**"
       - "tests/**"
@@ -85,7 +85,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: JSON Schema is valid JSON
-        run: python -c "import json; json.load(open('schema/wiki-schema.json'))"
+        run: python -c "import json; json.load(open('plugin/schema/wiki-schema.json'))"
       - name: All scripts compile
         run: |
           python -m compileall -q plugin/scripts/
