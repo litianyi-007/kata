@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/surebeli/kata/blob/main/schema/wiki-schema.json",
+  "$id": "https://github.com/litianyi-007/kata/blob/main/schema/wiki-schema.json",
   "title": "kata SCHEMA.md config blocks",
   "description": "Validates the YAML config blocks embedded in a wiki's SCHEMA.md (memory_tiers, custom_dimensions, frontmatter, tag_taxonomy, policies). Skills should validate SCHEMA.md against this before acting.",
   "type": "object",

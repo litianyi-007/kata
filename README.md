@@ -1,8 +1,8 @@
 # Kata
 
-[![tests](https://github.com/surebeli/kata/actions/workflows/test.yml/badge.svg)](https://github.com/surebeli/kata/actions/workflows/test.yml)
+[![tests](https://github.com/litianyi-007/kata/actions/workflows/test.yml/badge.svg)](https://github.com/litianyi-007/kata/actions/workflows/test.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-22d3ee.svg)](LICENSE)
-[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-22d3ee.svg)](https://github.com/surebeli/kata#installation)
+[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-22d3ee.svg)](https://github.com/litianyi-007/kata#installation)
 
 ![Kata — compile business semantics for AI-paired engineering. An AI-maintained wiki for project memory.](docs/assets/readme/kata-hero-banner.svg)
 
@@ -12,16 +12,16 @@ Pick the tool you use:
 
 ```bash
 # Claude Code (recommended, plugin path)
-claude /plugin marketplace add surebeli/kata
+claude /plugin marketplace add litianyi-007/kata
 claude /plugin install kata@kata
 
 # OR — Codex CLI
-git clone https://github.com/surebeli/kata ~/kata
+git clone https://github.com/litianyi-007/kata ~/kata
 cd ~/kata && python scripts/install_codex_skills.py
 export KATA_HOME=~/kata
 
 # OR — GitHub Copilot CLI (v2.15.2+)
-copilot plugin install surebeli/kata
+copilot plugin install litianyi-007/kata
 ```
 
 Then in any project directory:
@@ -206,7 +206,7 @@ The recommended install for Claude Code 2025+ users. Two-line setup:
 
 ```bash
 # 1. Register this repo as a marketplace (clones it into ~/.claude/plugins/)
-claude /plugin marketplace add surebeli/kata
+claude /plugin marketplace add litianyi-007/kata
 
 # 2. Install the kata plugin from the marketplace
 claude /plugin install kata@kata
@@ -225,7 +225,7 @@ claude /kata:wiki-init --domain "test" # interactive bootstrap should fire
 **Local-clone alternative** (for hacking on the plugin):
 
 ```bash
-git clone https://github.com/surebeli/kata
+git clone https://github.com/litianyi-007/kata
 cd kata
 claude /plugin marketplace add .          # add this clone as a marketplace
 claude /plugin install kata@kata
@@ -255,7 +255,7 @@ shared instructions that the installer injects into each generated skill.
 
 ```bash
 # 1. Clone kata to a stable home location
-git clone https://github.com/surebeli/kata ~/kata
+git clone https://github.com/litianyi-007/kata ~/kata
 
 # 2. Set KATA_HOME so installed skills can resolve plugin/scripts/*
 echo 'export KATA_HOME="$HOME/kata"' >> ~/.bashrc   # or ~/.zshrc
@@ -335,10 +335,10 @@ schema and produce the same wiki layout as Path A or B.
 
 ```bash
 # Install directly from the GitHub repo
-copilot plugin install surebeli/kata
+copilot plugin install litianyi-007/kata
 
 # OR from a local clone
-git clone https://github.com/surebeli/kata ~/kata
+git clone https://github.com/litianyi-007/kata ~/kata
 copilot plugin install ~/kata
 ```
 
@@ -1491,7 +1491,7 @@ on every commit that touches scripts, skills, schema, or tests. Use
 ## Origin
 
 Concept by [Andrej Karpathy](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
-(May 2025). Plugin design pattern from [PhoenixTeam](https://github.com/surebeli/PhoenixTeam).
+(May 2025). Plugin design pattern from [PhoenixTeam](https://github.com/litianyi-007/PhoenixTeam).
 
 This plugin aims to be a **faithful, opinionated implementation** of Karpathy's
 intentionally abstract concept. Where the original says _"everything mentioned

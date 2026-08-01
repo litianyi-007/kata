@@ -4,6 +4,32 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.15.5] — 2026-08-02 — GitHub owner handle rename (surebeli → litianyi-007)
+
+Patch release, non-functional: the plugin author's GitHub account was renamed;
+GitHub redirects the old handle, so this is a routine text-only follow-up, not
+an urgent fix.
+
+### Changed
+
+- Updated every currently-effective reference to the new handle across
+  `plugin.json` (repo root), `plugin/.claude-plugin/plugin.json`,
+  `.claude-plugin/marketplace.json` (`owner.name`, `plugins[0].homepage`),
+  `SKILL.md` frontmatter `author:`, `plugin/schema/wiki-schema.json`'s `$id`,
+  `LICENSE`, and `README.md` (badges, install commands, the PhoenixTeam
+  attribution link).
+- `.compliance-blocklist.txt`'s comment documenting the public-handle /
+  private-username split updated to name the current handle.
+
+### Not changed
+
+- CHANGELOG entries above this one, `docs/compliance-retro-2026-05-14.md`,
+  `docs/essay-drafts/**`, `docs/essay-style-guide.md`, the `docs/PRD-v1.1x-*.md`
+  author bylines, `docs/dogfood-guide-v1.6.md`, `docs/dogfood-necallkit-hn-essay.md`,
+  and `scripts/_release-switch-to-public.ps1` — these record historical
+  narrative or are outside the confirmed current-metadata scope of this pass;
+  left for the maintainer to triage separately.
+
 ## [2.15.4] — 2026-07-18 — installed-plugin schema packaging fix + orphan/dangling-link false positives on structural files
 
 Patch release (no manifest or skill-API surface changed — three bug fixes to

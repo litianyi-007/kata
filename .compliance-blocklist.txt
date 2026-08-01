@@ -33,7 +33,8 @@ HIH-D-[0-9]+
 @[A-Za-z0-9.-]+\.netease\.com
 
 # --- Author personal info (litianyi = local Windows username,
-#                          surebeli = public GitHub handle — keep public,
+#                          litianyi-007 = public GitHub handle (renamed
+#                          from surebeli 2026-08) — keep public,
 #                          litianyi is private) ---
 C:\\Users\\litianyi\\
 C:/Users/litianyi/
