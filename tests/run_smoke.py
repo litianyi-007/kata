@@ -355,6 +355,25 @@ def resolve_wiki_root(cwd: Path, env: dict[str, str]) -> Path:
     return Path(proc.stdout.strip())
 
 
+def _license_bearing_nodes(data, rel):
+    """Yield (license_value, label) for every "license" key in a JSON tree.
+
+    Walks nested structures so marketplace.json's plugins[] entries are covered
+    without naming them — the point is that a newly added manifest, or a new
+    entry inside an existing one, cannot silently declare a different license.
+    """
+    if isinstance(data, dict):
+        if isinstance(data.get("license"), str):
+            yield data["license"], str(rel)
+        for key, value in data.items():
+            if key == "license":
+                continue
+            yield from _license_bearing_nodes(value, f"{rel}::{key}")
+    elif isinstance(data, list):
+        for idx, value in enumerate(data):
+            yield from _license_bearing_nodes(value, f"{rel}[{idx}]")
+
+
 def main() -> int:
     print("Building fixture...")
     subprocess.run(
@@ -4598,6 +4617,59 @@ print(json.dumps({{
         )
     print(f"  ok  all {len(skill_dirs)} skills appear in each of "
           + ", ".join(r.name for r in readme_files))
+
+    print("\nTest 62d: LICENSE contains the actual MIT terms, and every "
+          "manifest agrees with it")
+    # Added 2026-08-03 alongside the same guard in harnessloop and hopper.
+    # Motivation is a real defect found in the sibling repo: hopper-plugin's
+    # LICENSE was a 19-line stub — the Apache *file header* boilerplate plus a
+    # "full text: <url>" line, with the entire TERMS AND CONDITIONS body absent
+    # — while package.json and three README badges all declared "Apache-2.0".
+    # GitHub could not identify it and reported the repo license as "Other".
+    # Nothing caught it because the guards that existed checked the *declared*
+    # field, never the file's contents. kata's own LICENSE is fine; this guard
+    # exists so it stays that way.
+    #
+    # Asserting on substantive clauses, not on a title line or a non-empty
+    # file: a stub would pass either of those.
+    license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    MIT_CLAUSES = (
+        "MIT License",
+        "Permission is hereby granted, free of charge",
+        "without restriction",
+        "The above copyright notice",
+        'THE SOFTWARE IS PROVIDED "AS IS"',
+        "IN NO EVENT SHALL",
+    )
+    missing_clauses = [c for c in MIT_CLAUSES if c not in license_text]
+    assert not missing_clauses, (
+        "LICENSE does not contain the substantive MIT terms; missing: "
+        f"{missing_clauses} — a link to the canonical text is not a license file"
+    )
+
+    # Discovery-based: any JSON in the repo that declares a "license" key must
+    # agree. Not a hardcoded file list — a new manifest is picked up for free.
+    SKIP_DIRS = {"node_modules", ".git", "_codex_install"}
+    declared = {}
+    for jf in sorted(ROOT.rglob("*.json")):
+        if any(part in SKIP_DIRS for part in jf.parts):
+            continue
+        if jf.name == "package-lock.json":
+            continue  # dependency licenses are third-party facts, not ours
+        try:
+            data = json.loads(jf.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        for holder, label in _license_bearing_nodes(data, jf.relative_to(ROOT)):
+            declared[label] = holder
+    assert declared, "no manifest declares a license — expected at least one"
+    distinct = set(declared.values())
+    assert distinct == {"MIT"}, (
+        "license declarations disagree with LICENSE (MIT): "
+        + ", ".join(f"{k}={v!r}" for k, v in sorted(declared.items()))
+    )
+    print(f"  ok  LICENSE carries all {len(MIT_CLAUSES)} MIT clauses; "
+          f"{len(declared)} manifest declaration(s) all say MIT")
 
     print("\nTest 63: schema packaging — single-source plugin/schema/"
           "wiki-schema.json + simulated marketplace-install layout")

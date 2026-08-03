@@ -4,6 +4,33 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.16.2] — 2026-08-03 — LICENSE 内容守卫
+
+kata's license does not change — it was already MIT, and its `LICENSE` already
+carried the full text. The sibling plugins (harnessloop, hopper) moved from
+Apache-2.0 to MIT in the same pass, so all three now agree.
+
+### Added
+
+- **Test 62d**: `LICENSE` must contain the substantive MIT clauses, and every
+  JSON in the repo that declares a `license` must agree with it. Added because of
+  what the same audit found next door: hopper-plugin's `LICENSE` was a 19-line
+  stub — an Apache file header plus a link to the real text, with the entire
+  terms body missing — while six manifests and three badges declared
+  `Apache-2.0`. GitHub reported that repo's license as `Other` and nobody
+  noticed, because every guard in place checked the *declared field* and none
+  ever opened the file.
+
+  kata was not affected. This guard exists so it stays that way. Both sides are
+  discovered — clauses asserted as text, manifests found by walking `*.json` at
+  any nesting depth — so neither a stub nor a newly added manifest can drift in
+  quietly. `package-lock.json` is skipped: dependency licenses are third-party
+  facts, not claims this repo makes.
+
+  Destructive proof used hopper's real stub shape (title + copyright + "full text:
+  <url>") → red, naming the missing clauses; flipping `plugin.json` to
+  `Apache-2.0` → red, naming every disagreeing manifest.
+
 ## [2.16.1] — 2026-08-03 — README 英文版・日本語版
 
 ### Added
