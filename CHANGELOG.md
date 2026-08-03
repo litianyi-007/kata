@@ -4,6 +4,40 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.16.1] — 2026-08-03 — README 英文版・日本語版
+
+### Added
+
+- **`README.en.md` (599 lines) and `README.ja.md` (554 lines)**, matching the
+  Chinese default structurally section for section. The English version recovers
+  original prose from the pre-v2.16.0 1501-line English README wherever the facts
+  still hold — the install mechanics, the layered-model and design-lineage tables,
+  memory tiers, external fallback plugins — rather than back-translating the
+  Chinese. Everything that postdates that file (the full 18-skill table, the
+  federation section, `--supplement-action`, and the entire "what it cannot do"
+  section) is translated fresh. The four corrections v2.16.0 made — 18 skills not
+  13/17, four install paths not three, SpecTeam not PhoenixTeam, six review rounds
+  not seven — are carried into both translations rather than re-inherited from the
+  old file.
+- **Test 62c**: every `README*.md` must mention every directory under
+  `plugin/skills/`. Deliberately anchored on skill **names**, not on a count:
+  names are code tokens that are never translated, so a single assertion covers
+  all three languages, whereas a count would need to know that "18 skills",
+  "18 个 skill" and "18 個の skill" are the same claim — an enumeration that rots
+  the moment a language is added. Both sides are discovered (skills from the
+  directory, READMEs from a glob); nothing is hardcoded.
+
+  Rehearsed against the real pre-v2.16.0 README before being written: it goes red
+  on exactly `wiki-config`, `wiki-federate` and `wiki-mcp-server` — the three that
+  were genuinely missing. Destructive proof: dropping `wiki-federate` from
+  `README.ja.md` alone → `README.ja.md does not mention 1 of 18 skills`.
+
+### Fixed
+
+- The `Claude Code plugin` badge pointed at `…/kata#installation`, an anchor that
+  stopped existing when the README's headings became Chinese. Each language now
+  points at its own install heading.
+
 ## [2.16.0] — 2026-08-03 — 文档审计：manifest 漂移、README 重排、测试密闭化
 
 A documentation-and-guards pass modelled on the same audit just run against the

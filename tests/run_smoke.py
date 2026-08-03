@@ -4567,6 +4567,38 @@ print(json.dumps({{
             print(f"  ok  {label}: count={count} matches (no name list "
                   f"to check)")
 
+    print("\nTest 62c: every README*.md documents every skill in plugin/skills/")
+    # The v2.16.0 audit found README.md at 1501 lines documenting 12 of 18
+    # skills — wiki-config, wiki-federate and wiki-mcp-server appeared nowhere
+    # in the whole file, and cross-wiki federation (four releases' worth of
+    # work) was mentioned twice as a word and never as a capability.
+    #
+    # Test 62b guards the *manifests*' skill claims. This guards the READMEs',
+    # and it is deliberately anchored on skill NAMES rather than on a count:
+    # names are code tokens that are never translated, so one assertion covers
+    # README.md (Chinese), README.en.md and README.ja.md alike. A count would
+    # have to know that "18 skills" / "18 个 skill" / "18 個の skill" are the
+    # same claim — an enumeration that rots the moment a language is added.
+    #
+    # Both sides are discovered, neither is hardcoded: skills from the
+    # directory, READMEs from a glob. Adding a skill without documenting it,
+    # or adding a translation that drops one, goes red.
+    readme_files = sorted(ROOT.glob("README*.md"))
+    assert readme_files, "no README*.md found at repo root"
+    skill_dirs = sorted(
+        p.name for p in (ROOT / "plugin" / "skills").iterdir() if p.is_dir()
+    )
+    assert skill_dirs, "plugin/skills/ has no skill directories"
+    for readme in readme_files:
+        text = readme.read_text(encoding="utf-8")
+        undocumented = [s for s in skill_dirs if s not in text]
+        assert not undocumented, (
+            f"{readme.name} does not mention {len(undocumented)} of "
+            f"{len(skill_dirs)} skills: {undocumented}"
+        )
+    print(f"  ok  all {len(skill_dirs)} skills appear in each of "
+          + ", ".join(r.name for r in readme_files))
+
     print("\nTest 63: schema packaging — single-source plugin/schema/"
           "wiki-schema.json + simulated marketplace-install layout")
     # Regression test for a real installed-cache defect: schema_validate.py's

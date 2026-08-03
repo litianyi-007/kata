@@ -4,7 +4,9 @@
 
 [![tests](https://github.com/litianyi-007/kata/actions/workflows/test.yml/badge.svg)](https://github.com/litianyi-007/kata/actions/workflows/test.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-22d3ee.svg)](LICENSE)
-[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-22d3ee.svg)](https://github.com/litianyi-007/kata#installation)
+[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-22d3ee.svg)](#快速开始)
+
+> 🇬🇧 [English](README.en.md) ・ 🇯🇵 [日本語](README.ja.md)
 
 ![Kata — compile business semantics for AI-paired engineering. An AI-maintained wiki for project memory.](docs/assets/readme/kata-hero-banner.svg)
 
