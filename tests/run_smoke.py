@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -293,6 +294,45 @@ def _read_skill_md_version(path: Path) -> str:
                                fm_match.group(1), re.MULTILINE)
     assert version_match, f"no 'version:' field in frontmatter of {path}"
     return version_match.group(1).strip()
+
+
+def _read_skill_md_description(path: Path) -> str:
+    """Extract the `description:` field from a SKILL.md's YAML frontmatter.
+
+    Same rationale as _read_skill_md_version: regex, not a YAML parse, to
+    keep root SKILL.md dependency-free. The field is a single quoted line.
+    """
+    text = path.read_text(encoding="utf-8")
+    fm_match = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
+    assert fm_match, f"no YAML frontmatter block found at top of {path}"
+    desc_match = re.search(r'^description:\s*"(.*)"\s*$',
+                            fm_match.group(1), re.MULTILINE)
+    assert desc_match, f"no 'description:' field in frontmatter of {path}"
+    return desc_match.group(1)
+
+
+def _extract_skill_count_and_list(description: str):
+    """Parse a manifest description's 'N skills (a, b, ..., z)' or bare
+    'N skills, ...' claim.
+
+    Returns (count: int, names: list[str] | None) — `names` is None when the
+    description states only a bare count with no parenthesized enumeration
+    (e.g. marketplace.json's "13 skills, multi-machine git sync...").
+    Deliberately regex-based against whatever text is currently there, not a
+    hardcoded expected count/list — the whole point of this helper is to let
+    callers diff "what the manifest claims" against "what plugin/skills/
+    actually contains" without either side being a fixed literal.
+    """
+    count_match = re.search(r"(\d+)\s+skills\b", description)
+    assert count_match, (
+        f"no 'N skills' claim found in description text: {description[:160]!r}")
+    count = int(count_match.group(1))
+    list_match = re.search(r"\d+\s+skills\s*\(([^)]*)\)", description)
+    if not list_match:
+        return count, None
+    raw = list_match.group(1)
+    names = [n.strip() for n in re.split(r"\s*[,/]\s*", raw) if n.strip()]
+    return count, names
 
 
 def resolve_wiki_root(cwd: Path, env: dict[str, str]) -> Path:
@@ -2100,61 +2140,79 @@ exit 0
     cp_path.unlink()
 
     print("\nTest 17: multi-project wiki root resolver")
-    resolver_dir = FIXTURE.parent / "_resolver"
-    if resolver_dir.exists():
-        import shutil as _sh
-        _sh.rmtree(resolver_dir)
-    wiki_home = resolver_dir / ".llm-wiki"
-    necall = wiki_home / "necall"
-    rtc = wiki_home / "rtc"
-    common = wiki_home / "common"
-    for root in (necall, rtc, common):
-        root.mkdir(parents=True)
-        (root / "SCHEMA.md").write_text("# schema\n", encoding="utf-8")
-        (root / "log.md").write_text("# log\n", encoding="utf-8")
-    project_dir = resolver_dir / "work" / "necall-repo"
-    project_dir.mkdir(parents=True)
-    (project_dir / ".llm-wiki.yaml").write_text("project: necall\n", encoding="utf-8")
-    fake_home = resolver_dir / "home"
-    fake_home.mkdir()
-    env = {"LLM_WIKI_HOME": str(wiki_home), "WIKI_PATH": "", "LLM_WIKI_PROJECT": "",
-           "HOME": str(fake_home), "USERPROFILE": str(fake_home),
-           "GIT_CEILING_DIRECTORIES": ""}
-    resolved = resolve_wiki_root(project_dir, env)
-    assert_eq("binding project", resolved, necall.resolve())
+    # Deliberately anchored under the OS temp dir (tempfile.mkdtemp()), NOT
+    # under FIXTURE.parent (tests/_resolver). This test exercises
+    # find_wiki_root()'s naked upward directory walk (no --path/--wiki given,
+    # see resolve_wiki_root() above), and tests/_resolver lives inside this
+    # very repo checkout — which on a real dev machine sits inside a larger
+    # project tree that may carry its own `.llm-wiki.yaml` project binding
+    # (this project's own dogfood kata wiki binding is a real example).
+    # Walking up from anywhere under the repo would hit that real file
+    # before the fallback/git-root logic under test ever runs — a false
+    # failure (or worse, a false pass) driven by whatever happens to sit
+    # above this checkout, not by find_wiki_root()'s actual behavior.
+    # tempfile.mkdtemp() has no ancestor relationship to any real project,
+    # so the resolver's upward walk stays fully inside the fixture tree
+    # regardless of what real dotfiles exist above this repo on any given
+    # machine. See docs/ISSUE-project-binding-unbounded-ancestor-walk.md
+    # for the underlying asymmetry this fixture works around (the git-root
+    # walk respects GIT_CEILING_DIRECTORIES; the project-binding walk does
+    # not) and why that asymmetry itself was left unfixed.
+    resolver_dir = Path(tempfile.mkdtemp(prefix="kata-resolver-test-"))
+    try:
+        wiki_home = resolver_dir / ".llm-wiki"
+        necall = wiki_home / "necall"
+        rtc = wiki_home / "rtc"
+        common = wiki_home / "common"
+        for root in (necall, rtc, common):
+            root.mkdir(parents=True)
+            (root / "SCHEMA.md").write_text("# schema\n", encoding="utf-8")
+            (root / "log.md").write_text("# log\n", encoding="utf-8")
+        project_dir = resolver_dir / "work" / "necall-repo"
+        project_dir.mkdir(parents=True)
+        (project_dir / ".llm-wiki.yaml").write_text("project: necall\n", encoding="utf-8")
+        fake_home = resolver_dir / "home"
+        fake_home.mkdir()
+        env = {"LLM_WIKI_HOME": str(wiki_home), "WIKI_PATH": "", "LLM_WIKI_PROJECT": "",
+               "HOME": str(fake_home), "USERPROFILE": str(fake_home),
+               "GIT_CEILING_DIRECTORIES": ""}
+        resolved = resolve_wiki_root(project_dir, env)
+        assert_eq("binding project", resolved, necall.resolve())
 
-    env_project = {"LLM_WIKI_HOME": str(wiki_home), "LLM_WIKI_PROJECT": "rtc",
-                   "WIKI_PATH": "", "HOME": str(fake_home),
-                   "USERPROFILE": str(fake_home)}
-    resolved = resolve_wiki_root(resolver_dir, env_project)
-    assert_eq("env project", resolved, rtc.resolve())
+        env_project = {"LLM_WIKI_HOME": str(wiki_home), "LLM_WIKI_PROJECT": "rtc",
+                       "WIKI_PATH": "", "HOME": str(fake_home),
+                       "USERPROFILE": str(fake_home)}
+        resolved = resolve_wiki_root(resolver_dir, env_project)
+        assert_eq("env project", resolved, rtc.resolve())
 
-    generic_dir = resolver_dir / "scratch"
-    generic_dir.mkdir()
-    non_git_env = {**env, "GIT_CEILING_DIRECTORIES": str(resolver_dir)}
-    resolved = resolve_wiki_root(generic_dir, non_git_env)
-    assert_eq("fallback common", resolved, common.resolve())
+        generic_dir = resolver_dir / "scratch"
+        generic_dir.mkdir()
+        non_git_env = {**env, "GIT_CEILING_DIRECTORIES": str(resolver_dir)}
+        resolved = resolve_wiki_root(generic_dir, non_git_env)
+        assert_eq("fallback common", resolved, common.resolve())
 
-    git_project = resolver_dir / "work" / "fresh-repo"
-    git_project.mkdir()
-    (git_project / ".git").mkdir()
-    resolved = resolve_wiki_root(git_project, env)
-    assert_eq("git root project path", resolved, (wiki_home / "fresh-repo").resolve())
+        git_project = resolver_dir / "work" / "fresh-repo"
+        git_project.mkdir()
+        (git_project / ".git").mkdir()
+        resolved = resolve_wiki_root(git_project, env)
+        assert_eq("git root project path", resolved, (wiki_home / "fresh-repo").resolve())
 
-    init_project = resolver_dir / "work" / "init-repo"
-    init_project.mkdir()
-    (init_project / ".git").mkdir()
-    init_proc2 = subprocess.run(
-        [sys.executable, str(SCRIPTS / "wiki_init.py"),
-         "--domain", "resolver init", "--categories", "notes"],
-        capture_output=True,
-        text=True,
-        cwd=str(init_project),
-        env={**os.environ, **env},
-    )
-    assert init_proc2.returncode == 0, init_proc2.stderr
-    assert (wiki_home / "init-repo" / "SCHEMA.md").exists(), init_proc2.stdout
-    print("  ok  wiki_init without --path created ~/.llm-wiki/init-repo")
+        init_project = resolver_dir / "work" / "init-repo"
+        init_project.mkdir()
+        (init_project / ".git").mkdir()
+        init_proc2 = subprocess.run(
+            [sys.executable, str(SCRIPTS / "wiki_init.py"),
+             "--domain", "resolver init", "--categories", "notes"],
+            capture_output=True,
+            text=True,
+            cwd=str(init_project),
+            env={**os.environ, **env},
+        )
+        assert init_proc2.returncode == 0, init_proc2.stderr
+        assert (wiki_home / "init-repo" / "SCHEMA.md").exists(), init_proc2.stdout
+        print("  ok  wiki_init without --path created ~/.llm-wiki/init-repo")
+    finally:
+        _windows_safe_rmtree(resolver_dir)
 
     print("\nTest 18: Codex skill installer packages kata skills for "
           "~/.codex/skills-style discovery")
@@ -2215,8 +2273,19 @@ exit 0
         "README should document ~/.codex/skills for Codex installs"
     assert "install_codex_skills.py" in readme_text, \
         "README should point Codex users at install_codex_skills.py"
-    assert "Restart Codex" in readme_text, \
-        "README should tell users to restart Codex after installing skills"
+    # The two assertions above ride on tokens that are never translated (a path
+    # and a filename), so they survive README.md becoming Chinese in v2.16.0 and
+    # will survive README.en.md / README.ja.md too. This third one is about
+    # prose, and prose has no such anchor — it broke the moment the README was
+    # rewritten in Chinese, even though the instruction itself was still there.
+    # Keep it, but as an explicit per-language marker set: adding a translation
+    # means adding its phrasing here. That is deliberate friction — the
+    # alternative (dropping the check) would let a translation silently ship
+    # without the restart step, which is the one instruction users skip.
+    RESTART_MARKERS = ("Restart Codex", "重启 Codex", "Codex を再起動")
+    assert any(m in readme_text for m in RESTART_MARKERS), \
+        ("README should tell users to restart Codex after installing skills; "
+         f"none of {RESTART_MARKERS} found — if you added a language, add its phrasing")
     assert "do not rely on AGENTS.md to register skills" in agents_text, \
         "plugin/AGENTS should clarify that AGENTS.md is not the skill registry"
     print("  ok  docs now describe the corrected Codex installation path")
@@ -4434,6 +4503,69 @@ print(json.dumps({{
     )
     print(f"  ok  all 4 version sources agree on {distinct.pop()!r}: "
           + ", ".join(versions.keys()))
+
+    print("\nTest 62b: skill count/list claims across all 4 manifests match "
+          "plugin/skills/ by directory discovery")
+    # Regression guard for a real drift found by manual audit on 2026-08-03:
+    # plugin/.claude-plugin/plugin.json said "17 skills" and its parenthesized
+    # list omitted wiki-skill-create; .claude-plugin/marketplace.json said
+    # "13 skills" — both stale after wiki-skill-create (and others) shipped,
+    # while plugin.json (root) and SKILL.md happened to already read "18".
+    # Numbers were four and inconsistent with nothing catching it.
+    #
+    # Deliberately discovery-based — mirrors the sister harnessloop project's
+    # G28 (which recursively discovers every manifest's version number and
+    # asserts they agree, rather than maintaining a checklist of locations).
+    # This test must NEVER hardcode "18" or the name list: that would make it
+    # pass forever even as the real skill count moves on. The only source of
+    # truth is a live directory listing.
+    actual_skill_dirs = sorted(
+        p.name for p in (ROOT / "plugin" / "skills").iterdir() if p.is_dir()
+    )
+    actual_count = len(actual_skill_dirs)
+    actual_short_names = {
+        (n[len("wiki-"):] if n.startswith("wiki-") else n)
+        for n in actual_skill_dirs
+    }
+
+    root_plugin_desc = json.loads(
+        (ROOT / "plugin.json").read_text(encoding="utf-8"))["description"]
+    plugin_manifest_desc = json.loads(
+        (ROOT / "plugin" / ".claude-plugin" / "plugin.json")
+        .read_text(encoding="utf-8"))["description"]
+    marketplace_doc = json.loads(
+        (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    marketplace_desc = next(
+        p for p in marketplace_doc["plugins"] if p["name"] == "kata")["description"]
+    skill_md_desc = _read_skill_md_description(ROOT / "SKILL.md")
+
+    manifest_descriptions = {
+        "plugin.json (root, Copilot manifest, description)": root_plugin_desc,
+        "plugin/.claude-plugin/plugin.json (description)": plugin_manifest_desc,
+        ".claude-plugin/marketplace.json (plugins[kata].description)": marketplace_desc,
+        "SKILL.md (frontmatter description)": skill_md_desc,
+    }
+
+    for label, desc in manifest_descriptions.items():
+        count, names = _extract_skill_count_and_list(desc)
+        assert count == actual_count, (
+            f"{label} claims {count} skills but plugin/skills/ actually "
+            f"contains {actual_count}: {actual_skill_dirs}"
+        )
+        if names is not None:
+            claimed = set(names)
+            missing = actual_short_names - claimed
+            extra = claimed - actual_short_names
+            assert not missing and not extra, (
+                f"{label}'s skill list disagrees with plugin/skills/ "
+                f"discovery — missing from manifest: {sorted(missing)}, "
+                f"listed but not on disk: {sorted(extra)}"
+            )
+            print(f"  ok  {label}: count={count} matches, "
+                  f"name list matches ({len(names)} names)")
+        else:
+            print(f"  ok  {label}: count={count} matches (no name list "
+                  f"to check)")
 
     print("\nTest 63: schema packaging — single-source plugin/schema/"
           "wiki-schema.json + simulated marketplace-install layout")

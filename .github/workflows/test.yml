@@ -6,6 +6,7 @@ on:
     paths:
       - "**.py"
       - "**.md"
+      - "**.json"
       - "plugin/schema/**"
       - "plugin/scripts/**"
       - "plugin/skills/**"
@@ -16,6 +17,7 @@ on:
     paths:
       - "**.py"
       - "**.md"
+      - "**.json"
       - "plugin/schema/**"
       - "plugin/scripts/**"
       - "plugin/skills/**"
@@ -29,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.10", "3.11", "3.12", "3.13"]
     # Force Python UTF-8 mode on every runner. Without this, windows-latest
     # uses cp1252 by default and any subprocess that prints a non-ASCII

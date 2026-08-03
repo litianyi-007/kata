@@ -1,1501 +1,494 @@
 # Kata
 
+**给 AI 结对编程用的项目记忆——一次编译、持续更新，人类提问、AI 维护。**
+
 [![tests](https://github.com/litianyi-007/kata/actions/workflows/test.yml/badge.svg)](https://github.com/litianyi-007/kata/actions/workflows/test.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-22d3ee.svg)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-22d3ee.svg)](https://github.com/litianyi-007/kata#installation)
 
 ![Kata — compile business semantics for AI-paired engineering. An AI-maintained wiki for project memory.](docs/assets/readme/kata-hero-banner.svg)
 
-## Quick install
+## 它解决什么
 
-Pick the tool you use:
+项目积累的判断——为什么这个阈值是这个数、上一次这个方案被否是因为什么——散在聊天记录、
+散在没人再打开的文档里。每次换一个 agent 会话，这些东西都要重新现学一遍，或者干脆没学到，
+然后同一个错误又踩一遍。
 
-```bash
-# Claude Code (recommended, plugin path)
-claude /plugin marketplace add litianyi-007/kata
-claude /plugin install kata@kata
+kata 是一个 **AI 维护、人类提问的 wiki**：源自
+[Karpathy 的 LLM-Wiki 构想](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)——
+「不像 RAG，wiki 是编译一次然后保持更新的」「你（人类）负责挑素材、问好问题，剩下的交给 LLM」。
+kata 在这个构想之上加了一个**自我闭环**：ingest → 交叉链接 → 有价值的问题被归档成 hub 页 →
+下一个 session 直接读 hub 再动手。
 
-# OR — Codex CLI
-git clone https://github.com/litianyi-007/kata ~/kata
-cd ~/kata && python scripts/install_codex_skills.py
-export KATA_HOME=~/kata
-
-# OR — GitHub Copilot CLI (v2.15.2+)
-copilot plugin install litianyi-007/kata
-```
-
-Then in any project directory:
-
-```bash
-# Initialize a wiki for your project (interactive: picks categories per domain)
-claude /kata:wiki-init
-```
-
-You now have 18 skills (`wiki-init`, `wiki-ingest`, `wiki-search`,
-`wiki-graph`, `wiki-tier`, `wiki-dream`, `wiki-session-ingest`, `wiki-spec`,
-`wiki-skill-create`, `wiki-sync`, …) operating on a fresh wiki at
-`~/.llm-wiki/<your-project>/`. Detailed install options below.
-
-## What problem this solves
-
-For a worked example of the failure mode kata addresses ("code-correct,
-business-wrong" — when LLMs ship code that passes review but breaks
-because of the team's local spec the model can't infer), see
-[the Essay #1 draft](docs/essay-drafts/2026-05-13-essay1-code-quality-vs-business-DRAFT.md).
-Three concrete bugs (B066/B070/B074), one wiki, +17 edges from one filed
-query.
+一次实测：在 NECallKit（多平台 Electron + native SDK）的 4 周 dogfood 里，一次被归档的问题
+（filed query）让 wiki 多长出 **17 条边**——而普通 import 平均每页只带来 5 条边。三个真实
+bug（B066/B070/B074）、一个 wiki。细节见
+[Essay #1 草稿](docs/essay-drafts/2026-05-13-essay1-code-quality-vs-business-DRAFT.md)。
 
 ![One filed query, +17 edges. Imports averaged 5 edges per page. The wiki grows when you ask it questions, not when you load it.](docs/assets/essay/V1-wiki-compounding.svg)
 
-*The compounding moment.* Source data: 4-week dogfood on NECallKit
-(multi-platform Electron + native SDK). See the essay above for the full
-evidence chain.
+### 跟邻居们比
 
-## The loop
+|                        | kata                             | Obsidian Copilot / Smart Connections | MCP memory servers | RAG / 向量库        |
+|------------------------|-----------------------------------|---------------------------------------|---------------------|----------------------|
+| 真相落在哪             | 你的 markdown 文件                | 你的 markdown 文件                    | server 端存储       | embedding 索引        |
+| 编译一次还是每查一次   | 编译一次，持续更新                | 每次查询现算                          | 每次查询现算        | 每次查询现算          |
+| 交叉引用               | ingest 时写进页面                 | 从 embedding 现算                     | 无或 schema 定型     | 无                    |
+| 离线可用               | 是（不需要 embedding 模型）        | 需要 embedding 模型                    | 需要 server         | 需要 embedding 模型    |
 
-![The compounding loop: human curates source → wiki-ingest extracts and files → cross-links touch 10-15 existing pages → maintainer-decision query files back as a new hub page (+17 edges from one filed query) → next session reads compiled knowledge before writing code.](docs/assets/readme/kata-the-loop.svg)
+kata 把综合结果**烤进了 wiki 本体**；RAG 和聊天记忆每次都要重新现算一遍——对流动检索来说很好，
+但交叉引用从来没有落地，所以不会越用越厚。
 
-Each filed query becomes a hub. Hubs cross-link. The next agent's
-session lands on the hub before it writes a line.
+## 快速开始
 
-The remainder of this README covers: install options (A/B/C), the layered
-product model, design lineage from Karpathy's LLM-Wiki gist, the 13-skill
-contract, and operational guides (multi-machine sync, custom frontmatter
-dimensions, memory-tier policy).
+前置条件：Git ≥ 2.20（v1.8 sync 自定义 merge driver 需要）；Python 3.10+（纯 stdlib，
+`plugin/scripts/` 下的脚本不需要 `pip install`）。
 
----
+kata 有**四条并行的安装路径**——挑一条匹配你的 LLM 工具。四条路径产出**同样的 18 个
+skill**和**同样的 wiki 文件系统布局**；wiki 内容本身永远单独放在 `~/.llm-wiki/<project>/`，
+跟你选哪条安装路径无关。
 
-## What Kata is (the layered model)
+| 路径 | 工具 | 安装位置 | 范围 |
+|---|---|---|---|
+| A | Claude Code（推荐） | `~/.claude/plugins/`（由 `claude /plugin install` 管理） | 全局 |
+| B | Codex CLI | `~/.codex/skills/` + `~/kata/`（生成的 skills + 环境变量） | 全局 |
+| C | Standalone（任意 LLM） | 粘贴进会话作为 system prompt | 单次会话 |
+| D | GitHub Copilot CLI（v2.15.2+） | `~/.config/github-copilot/copilot-cli/`（由 `copilot plugin install` 管理） | 全局 |
 
-| Layer | What it is |
-|---|---|
-| **Base** | [Karpathy's LLM-Wiki principle](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — compiled once, kept current; humans curate, LLMs maintain; everything optional and modular. |
-| **Core** | A **self-evolving knowledge system** built on the base: (1) a self-closing loop — ingest → cross-link → filed-query → compounding pages; (2) auto-dreaming — frozen pages resurface when their relevance returns. The wiki doesn't just persist; it grows back toward what's currently mattering. |
-| **Phase 1** *(current)* | **AI-paired engineering.** Use the core wiki to compile project business semantics — thresholds, lifecycle invariants, domain conventions — so AI agents read project conventions before they write code. v1.4 → v1.13 ship this reach. |
-| **Phase 1+** *(shipped — Phase 3 preview)* | **Spec History Management (v1.13).** For SDD / superpowers-style flows that accumulate specs over time. `wiki-spec preflight` makes new specs answer for the prior specs they overlap. Phases 0/2 (advisory + ingest-time enforcement, v2.4.0), Phase 4 (lineage tree view, v2.13.0), Phase 3 (auto-propagation, v2.12.0 opt-in preview). Phase 1 (external-source backfill) was tried and removed in v2.5.0; cross-wiki authoring goes through v1.12 federation. The transactional reland of Phase 3 is tracked in `docs/PRD-v1.14-spec-propagation-reconcile.md`. |
-| **Phase 1+** *(shipped)* | **Work-Loop Bridge (v1.15).** Kata's documentation loop closes (ingest → cross-link → query → file-back), but real engineering work — code search, edits, tests, verification — used to fall *outside* that loop, relying on individual discipline to re-enter. `wiki-skill-create` generates project-local skills that wrap kata's query/ingest with the project's actual work pipeline. Four MVP patterns: `issue-fix`, `feature-build`, `bug-debug`, `custom`. Consult-before / file-back-after becomes the structural default, not a discipline. See `docs/PRD-v1.15-work-loop-bridge.md`. |
-| **Phase 2** *(designed, not yet implemented)* | **Team spec authoring + dispute resolution.** A self-closing loop for spec drafts, ratified positions, and the rejected alternatives — so future decisions don't re-litigate the same questions. v1.13 is one of the substrates this rests on. |
-| **Phase 3+** | Open. The core extends to new boundaries as we learn what compounds. |
-
-The **product** is the Core + Phase reaches. Phase 1 is the first concrete
-boundary; it's not the definition of Kata.
-
-## The kata mastery curve
-
-1. **Accept** — `wiki-init` lays down a starter kata: default categories,
-   default schema, default rituals. You run the form as-is.
-2. **Adapt** — you customize schema, add domain dimensions, extend skills for
-   your project's vocabulary. The kata becomes yours.
-3. **Transcend** — the form fades. Your AI agents brief themselves, maintain
-   cross-links, resurface frozen knowledge when it matters again. The workflow
-   is invisible; only the work remains.
-
-The wiki is **compiled once and kept current** (not RAG). The human curates
-sources and asks good questions; the AI does all the bookkeeping — reading,
-summarizing, cross-referencing, filing, maintaining consistency. You (almost)
-never write wiki pages yourself.
-
-13 skills span ingest → search → graph → dream → sync — see the skill index
-further down. The product is the kata; the wiki is what it produces.
-
----
-
-## Design lineage
-
-This plugin implements Karpathy's original concept and extends it with three
-systems he left open. The table below shows which ideas come from the original
-and which are plugin extensions.
-
-### From Karpathy's original
-
-| Idea | Original quote / reference |
-|------|---------------------------|
-| Compiled once, kept current (not RAG) | _"Unlike RAG... the wiki is compiled once and then kept up to date"_ |
-| Human curates, LLM maintains | _"You curate sources and ask good questions, the LLM does the rest"_ |
-| `raw/` immutable layer | _"You don't modify raw source material"_ |
-| `index.md` — read index first | _"The LLM reads the index first to find relevant pages"_ |
-| `log.md` — append-only action log | _"A chronological log of all actions taken"_ |
-| Ingest: 10–15 pages per source | _"A single source can touch 10-15 pages"_ |
-| Query results file back and compound | _"Queries compound in the wiki just like ingested sources"_ |
-| Lint: stale content + data gaps | _"Lint also finds data gaps that could be filled with a web search"_ |
-| Schema co-evolves with the wiki | _"The schema... co-evolves along with the wiki over time"_ |
-| Git repo by default | _"The wiki directory is just a git repo"_ |
-| Obsidian as the IDE | _"Obsidian is the IDE. The LLM is the programmer."_ |
-| Everything optional and modular | _"Pick what's useful, ignore what isn't"_ |
-| qmd for scaling search | _"qmd... for search at scale"_ |
-| Web search to fill gaps | _"The LLM is good at suggesting new questions to investigate"_ |
-
-### Plugin extensions (this project)
-
-| Extension | What it adds | Why |
-|-----------|-------------|-----|
-| **SCHEMA.md as authoritative config** | All conventions in one file; agent reads and enforces rather than hardcoding | Karpathy said schema co-evolves — we formalized _where_ it lives and _who_ enforces it |
-| **Interactive domain-specific init** | `wiki-init` proposes categories per domain (research/book/business/personal) | Karpathy's structure is intentionally abstract — a real tool needs a concrete bootstrapper |
-| **Bulk import** (`wiki-import`) | 5-phase migration from Obsidian/Notion/Confluence/folders with checkpoint/resume | Original assumes you start fresh; most users have existing notes |
-| **Image handling** in `wiki-ingest` | Auto-download referenced images to `raw/assets/`, rewrite to local paths | URLs rot; Karpathy didn't specify image handling |
-| **Structured graph queries** (`wiki-graph`) | Frontmatter filters, BFS neighbors, shortest-path, hubs/orphans — no persistent graph DB | The `[[wikilink]]` graph is implicit in Karpathy's design; we made it queryable |
-| **Custom frontmatter dimensions** | Domain-specific fields (e.g. `version:`) declared in SCHEMA.md, prompted during ingest | Karpathy mentions frontmatter but doesn't specify extensibility |
-| **Three-tier memory aging** | `active`/`archived`/`frozen` tiers computed on-the-fly from source dates | Karpathy notes "stale content" in lint but doesn't propose a temporal model |
-| **External fallback plugins** | `.wiki-plugins.yaml` registers CLI tools (deepwiki-cli, web search) as `wiki-query` fallback | Karpathy mentions web search for gaps; we generalized to any external tool with a closed-loop ingest pipeline |
-| **Multi-format query output** | markdown / table / slides (Marp) / chart (matplotlib) / canvas (Obsidian) | Original doesn't specify output formats |
-| **Plugin packaging** | `.claude-plugin/` marketplace for Claude Code, copy-based `AGENTS.md` for Codex CLI, single-file `SKILL.md` for any LLM | Karpathy's concept is tool-agnostic; this wraps it for specific platforms |
-
-### What we deliberately did NOT add
-
-- **Persistent graph database** — the filesystem is the graph; scanning hundreds of pages takes milliseconds
-- **Auto-pruning of frozen content** — planned as "auto-dreaming" in v2; frozen = parked, not deleted
-- **Embedding-based semantic search** — deferred to qmd; the built-in 3-pass scan handles Karpathy's sweet spot (~100 sources)
-- **Multi-user access control** — the wiki is a git repo; use branches and PRs for collaboration
-
----
-
-## Two ways to use this
-
-**Simple path (3 steps).** Just want the wiki idea, no plugin infrastructure?
-1. Copy [`SKILL.md`](SKILL.md) into a fresh chat with any LLM
-2. Ask the model to run `wiki-init` in your target directory
-3. Drop sources into `raw/`; ask the model to ingest, search, query
-
-The standalone prompt has the full system. Skip the rest of this README.
-
-**Full plugin path.** Want versioned skills, slash commands, scripts, and
-schema validation in Claude Code? Continue below.
-
-## How this differs from neighbors
-
-![Kata vs RAG comparison: RAG re-derives every query, cross-references inferred from embeddings, answer lives in chat (lost at session end), knowledge layer = retrieval cache. Kata compiles once and is kept current, cross-references are written into pages, answer becomes a wiki page (next session reads it), knowledge layer = compiled artifact. Tagline: Retrieval re-asks. Compilation remembers.](docs/assets/readme/kata-vs-rag.svg)
-
-|                          | This plugin                          | Obsidian Copilot / Smart Connections | MCP memory servers          | RAG / vector DB             |
-| ------------------------ | ------------------------------------ | ------------------------------------ | --------------------------- | --------------------------- |
-| Source of truth          | Your markdown files                  | Your markdown files                  | Server-side store           | Embedding index             |
-| Compiled or per-query?   | Compiled once, kept current          | Per-query retrieval                  | Per-query retrieval         | Per-query retrieval         |
-| Cross-references         | Written into pages on ingest         | Computed from embeddings             | None or schema-typed        | None                        |
-| Schema co-evolves        | Yes (SCHEMA.md, agent-proposed)      | No                                   | No                          | No                          |
-| Works offline            | Yes (no embedding model needed)      | Embedding model required             | Server required             | Embedding model required    |
-
-The wiki **bakes synthesis into the artifact**. RAG and chat memory rebuild it
-on every query — fine for fluid retrieval, but the cross-references are never
-written down, so they don't compound.
-
-## Installation
-
-kata ships as four parallel install paths — pick the one matching your
-LLM tooling. All paths give you the same 18 skills and the same wiki
-filesystem layout.
-
-| Path | Tool | Install location | Scope |
-|------|------|------------------|-------|
-| A | Claude Code (recommended) | `~/.claude/plugins/` (managed by `claude /plugin install`) | Global |
-| B | Codex CLI | `~/.codex/skills/` + `~/kata/` (generated skills + env var) | Global |
-| C | Standalone | Pasted into LLM session as system prompt | Per-session |
-| D | GitHub Copilot CLI | `~/.config/github-copilot/copilot-cli/` (managed by `copilot plugin install`) | Global |
-
-All three install kata **once globally** (or once per session for C); the
-wiki content lives separately at `~/.llm-wiki/<project>/` regardless of
-which path you pick. kata's filesystem layout, skill contracts, and
-SCHEMA.md format are identical across all three.
-
-**Prerequisites for any path:**
-- Git ≥ 2.20 (for the v1.8 sync custom merge driver `merge=` attribute support)
-- Python 3.10+ (deterministic scripts under `plugin/scripts/`); pure stdlib,
-  no `pip install` needed
-
-### Path A — Claude Code (plugin + marketplace)
-
-The recommended install for Claude Code 2025+ users. Two-line setup:
+**Path A — Claude Code：**
 
 ```bash
-# 1. Register this repo as a marketplace (clones it into ~/.claude/plugins/)
 claude /plugin marketplace add litianyi-007/kata
-
-# 2. Install the kata plugin from the marketplace
 claude /plugin install kata@kata
 ```
 
-After install, the 13 skills appear as slash commands:
-`/kata:wiki-init`, `/kata:wiki-ingest`, `/kata:wiki-sync`, etc.
+本地 clone 上直接改插件：`claude /plugin marketplace add .` 之后 `./plugin/skills/` 里的
+改动无需重装即可生效。更新/卸载：`claude /plugin update kata` / `claude /plugin uninstall kata`
+（wiki 内容不受影响）。
 
-**Verify install:**
-
-```bash
-claude /plugin list                       # kata should appear
-claude /kata:wiki-init --domain "test" # interactive bootstrap should fire
-```
-
-**Local-clone alternative** (for hacking on the plugin):
+**Path B — Codex CLI**（Codex 没有插件市场，靠生成 skills 到发现目录）：
 
 ```bash
-git clone https://github.com/litianyi-007/kata
-cd kata
-claude /plugin marketplace add .          # add this clone as a marketplace
-claude /plugin install kata@kata
-# Edits in ./plugin/skills/ are picked up live (no reinstall needed)
-```
-
-**Update / uninstall:**
-
-```bash
-claude /plugin update kata             # pull latest from marketplace
-claude /plugin uninstall kata          # remove (wiki content stays put)
-```
-
-### Path B — Codex CLI (global install, recommended)
-
-Codex CLI doesn't have a plugin marketplace. Instead, it discovers
-user-installed skills from a skills root (commonly `~/.codex/skills/`).
-kata is a global tool (operates on `~/.llm-wiki/<project>` no matter
-where you run Codex from), so the right install pattern is:
-
-1. clone this repo somewhere stable
-2. point `KATA_HOME` at that clone
-3. generate Codex-ready skills into your Codex skills directory
-
-`plugin/AGENTS.md` is **not** the skill registry for Codex. It contains
-shared instructions that the installer injects into each generated skill.
-
-```bash
-# 1. Clone kata to a stable home location
 git clone https://github.com/litianyi-007/kata ~/kata
-
-# 2. Set KATA_HOME so installed skills can resolve plugin/scripts/*
-echo 'export KATA_HOME="$HOME/kata"' >> ~/.bashrc   # or ~/.zshrc
-#    Windows PowerShell:
-#    setx KATA_HOME "$env:USERPROFILE\kata"
-
-# 3. Install kata into Codex's discovered skills directory
+echo 'export KATA_HOME="$HOME/kata"' >> ~/.zshrc   # 或 ~/.bashrc
 python ~/kata/scripts/install_codex_skills.py
-# Optional explicit destination:
-# python ~/kata/scripts/install_codex_skills.py --dest ~/.codex/skills
 ```
 
-Restart Codex after installing or updating kata. New skills are
-loaded at session start, so the current session will not hot-load them.
-Because Codex CLI has no plugin marketplace update prompt, generated
-skills include a Codex update check: compare the installed skill version
-with `$KATA_HOME/plugin/.claude-plugin/plugin.json`; if they differ, run
-`git pull`, rerun `python scripts/install_codex_skills.py`, and restart
-Codex.
+装完/更新后重启 Codex 才会加载新 session。`plugin/AGENTS.md` **不是** Codex 的 skill
+注册表——它是安装器注入进每个生成 skill 的共享说明。只想在单个项目里用不同版本？加
+`--dest <project>/.codex/skills`。
 
-**Verify install:**
+**Path C — Standalone（任意 LLM）：**
 
 ```bash
-ls ~/.codex/skills/wiki-sync/SKILL.md
-ls ~/kata/plugin/scripts/wiki_sync.py
-echo "$KATA_HOME"                          # should print ~/kata
-codex                                          # restart; new session should list kata skills
+cat SKILL.md | pbcopy   # macOS；Linux 用 xclip，Windows 用 clip
 ```
 
-**Update / uninstall:**
+`SKILL.md` 自包含——每个 skill 的说明、每条守卫、每条已知限制。跟 A/B 产出同样的 schema
+和 wiki 布局，代价是没有确定性 Python 脚本（LLM 得每次现算排序/图查询），也没有 `wiki-sync`
+的自动合并驱动。
+
+**Path D — GitHub Copilot CLI：**
 
 ```bash
-cd ~/kata && git pull                       # pulls plugin updates
-# Reinstall generated skills after pulling
-# python ~/kata/scripts/install_codex_skills.py
-#
-# Uninstall: remove ~/.codex/skills/wiki-* and then
-# rm -rf ~/kata  (wiki content at ~/.llm-wiki/ is independent and
-# stays put — it's your data, not the plugin)
-```
-
-> **Per-project alternative.** If you only want kata active in one
-> Codex CLI project (or want different kata versions per project),
-> use `scripts/install_codex_skills.py --dest <project>/.codex/skills`
-> or another project-local Codex skill root your environment loads. Do
-> not assume copying only `plugin/AGENTS.md` will register skills. For
-> the typical "personal tool, one install, multiple projects" case, the
-> global install above is cleaner.
-
-### Path C — Standalone (any LLM)
-
-For one-off use with Claude.ai, ChatGPT, Cursor, or any LLM with a chat
-interface — paste [`SKILL.md`](SKILL.md) into the session as a system prompt
-or first message:
-
-```bash
-# Just one file. Copy its contents into your LLM session.
-cat SKILL.md | clip     # Windows: copies to clipboard
-cat SKILL.md | xclip    # Linux
-cat SKILL.md | pbcopy   # macOS
-```
-
-`SKILL.md` is self-contained — every skill's prose, every guard, every
-limitation. No external file dependencies. The LLM will follow the same
-schema and produce the same wiki layout as Path A or B.
-
-**Trade-offs vs A/B:**
-- ✅ No install, works with any LLM
-- ✅ Always the latest skill set (autogenerated table is in sync)
-- ❌ No deterministic Python scripts (LLM has to recompute search ranking,
-  graph queries, etc. each call) — fine for ≤ 100-page wikis, slow at scale
-- ❌ No `wiki-sync` automation — sync needs the `wiki_sync.py` script;
-  Path C wikis can still git pull/push manually but skip the custom
-  driver auto-merge
-
-### Path D — GitHub Copilot CLI (v2.15.2+)
-
-```bash
-# Install directly from the GitHub repo
 copilot plugin install litianyi-007/kata
-
-# OR from a local clone
-git clone https://github.com/litianyi-007/kata ~/kata
-copilot plugin install ~/kata
 ```
 
-Copilot CLI reads kata's repo-root `plugin.json` (added in v2.15.2)
-which points its skill loader at `plugin/skills/`. After install,
-Copilot can describe-trigger any of the 18 kata skills by their
-SKILL.md description field.
+Copilot CLI 读仓库根目录的 `plugin.json`（v2.15.2 加的，Copilot 只找顶层清单，不递归子目录），
+它指向 `plugin/skills/`——跟 Claude Code 用的是同一批 SKILL.md 文件。
 
-**Verify install:**
+### 跑第一个 wiki
 
 ```bash
-copilot plugin list                       # kata should appear
-copilot plugin info kata                  # version + skills count
-```
-
-**Path differences from A:**
-
-- Same on-disk skill files as Claude Code — kata's SKILL.md frontmatter
-  is dual-compatible (Claude Code requires `.claude-plugin/plugin.json`
-  to OMIT `skills` field; Copilot's root `plugin.json` declares
-  `skills: "plugin/skills/"`).
-- Deterministic Python scripts (`plugin/scripts/*.py`) work the same —
-  Copilot CLI invokes Python via skill body's shell directives.
-- `wiki-sync` git merge driver registers per-clone the same way.
-
-**Update / uninstall:**
-
-```bash
-copilot plugin update kata             # pulls latest from GitHub
-copilot plugin uninstall kata          # removes kata; wiki content stays put
-```
-
-### After install (any path)
-
-Verify the skill set is wired:
-
-```bash
-# Claude Code: plugin marketplace install
-ls ~/.claude/plugins/kata/plugin/skills/ 2>/dev/null
-
-# Codex CLI: generated user skills
-ls ~/.codex/skills/wiki-* 2>/dev/null
-
-# Copilot CLI: cached plugin
-copilot plugin list 2>/dev/null | grep kata
-```
-
-Then jump to **Quick start** below to bootstrap your first wiki.
-
----
-
-## Multi-project wiki layout
-
-Global installs resolve wiki roots per project. Recommended layout:
-
-```text
-~/.llm-wiki/
-├── common/
-├── necall/
-└── rtc/
-```
-
-Each child directory is a full independent wiki with its own `SCHEMA.md`,
-`index.md`, `log.md`, `raw/`, `dreaming/`, watcher queue, and memory-tier
-settings. If no project is specified or detected, skills use
-`~/.llm-wiki/common`.
-
-Path resolution order:
-
-1. Explicit `--path` / `--wiki`
-2. `WIKI_PATH`
-3. Current directory already inside a wiki root
-4. `LLM_WIKI_PROJECT` under `LLM_WIKI_HOME` (default `~/.llm-wiki`)
-5. Project-local `.llm-wiki.yaml` / `.kata.yaml`
-   *(single wiki per file; for multi-wiki coexistence on one machine see
-   step 6 and the section "Multiple wikis on one machine" below)*
-6. `~/.llm-wiki/registry.yaml`
-7. Git root name as `~/.llm-wiki/{repo-name}`
-8. Legacy `~/.kata/config.yaml`
-9. `~/.llm-wiki/common`
-
-Bind a project repository explicitly:
-
-```yaml
-# .llm-wiki.yaml in the project repo
-project: necall
-# or:
-wiki_path: ~/.llm-wiki/necall
-```
-
-### Multiple wikis on one machine
-
-`.llm-wiki.yaml` is a **single-path cache**: one file binds the surrounding
-directory to exactly one wiki root. Listing multiple `wiki_path:` entries
-in the same file does **not** work — the parser keeps only the last one it
-sees. To host several wikis side by side, pick one of the patterns below.
-
-> **Git hygiene.** When the project repo is git-managed, add
-> `.llm-wiki.yaml` to its `.gitignore`. The binding is per-machine state
-> (absolute paths differ across Windows/macOS/Linux; even portable
-> `~/...` values vary per developer), and checking it in causes
-> cross-machine conflicts and leaks each maintainer's local wiki layout.
-> Prefer the global `~/.llm-wiki/registry.yaml` (also outside the repo)
-> when you need shared, reproducible mappings.
-
-**Layout.** Each wiki is an independent directory under `~/.llm-wiki/`:
-
-```
-~/.llm-wiki/
-├── common/         # default catch-all
-├── necall/         # NECallKit project wiki
-├── research/       # research / reading notes
-└── playground/     # side-project sandbox
-```
-
-**Pattern A — one `.llm-wiki.yaml` per project repo.** Drop a binding in
-each project root; whichever project you `cd` into resolves to its own
-wiki:
-
-```yaml
-# /path/to/NECallKit/.llm-wiki.yaml
-wiki_path: ~/.llm-wiki/necall
-```
-```yaml
-# /path/to/research-notes/.llm-wiki.yaml
-project: research
-```
-
-**Pattern B — a single global `~/.llm-wiki/registry.yaml`.** Preferred
-when you maintain many projects; no per-repo file required:
-
-```yaml
-projects:
-  /path/to/NECallKit:
-    wiki_path: ~/.llm-wiki/necall
-  /path/to/research-notes:
-    project: research
-  /path/to/playground:
-    wiki_path: ~/.llm-wiki/playground
-```
-
-**Pattern C — hybrid with nested override.** A monorepo binds the default
-wiki, but a submodule binds its own. The resolver walks up from cwd and
-takes the **innermost** binding (parent bindings only apply when no closer
-one exists):
-
-```
-/path/to/monorepo/.llm-wiki.yaml              → wiki_path: ~/.llm-wiki/main
-/path/to/monorepo/external/sdk/.llm-wiki.yaml → wiki_path: ~/.llm-wiki/sdk
-```
-
-Running a skill from `monorepo/external/sdk/` resolves to `sdk`; from the
-monorepo root it resolves to `main`. The same precedence applies to git
-submodules.
-
-**Per-shell override.** To temporarily switch wikis without editing any
-binding:
-
-```powershell
-$env:WIKI_PATH = "$env:USERPROFILE\.llm-wiki\research"
-# or
-$env:LLM_WIKI_PROJECT = "research"
-```
-
-These short-circuit the binding/registry lookup for the current session
-only. `LLM_WIKI_HOME` (default `~/.llm-wiki`) is the parent directory that
-`LLM_WIKI_PROJECT` resolves against:
-
-```powershell
-# optional — only needed if you don't want the default ~/.llm-wiki parent
-$env:LLM_WIKI_HOME = "$env:USERPROFILE\.llm-wiki"
-```
-
-Initialize a project wiki:
-
-```powershell
-py -3 .\scripts\wiki_init.py `
-  --domain "development documentation knowledge base" `
-  --categories architecture,decisions,features,runbooks,discussions,queries
-```
-
-Run that from inside a git repo to create/use `~/.llm-wiki/{repo-name}`.
-Outside a git repo, pass `--path`, set `LLM_WIKI_PROJECT`, or accept the
-fallback `~/.llm-wiki/common`. Query/import/dream commands do not create
-an uninitialized wiki; run `wiki-init` first for each project.
-
-## Skills
-
-| Skill | Invocation | Origin | Purpose |
-|-------|-----------|--------|---------|
-| wiki-init | `/kata:wiki-init` | extension | **Interactive** bootstrap — domain, categories, custom dimensions, tier config |
-| **wiki-import** | `/kata:wiki-import <path>` | extension | Bulk-import existing docs (Obsidian/Notion/Confluence/folder) |
-| wiki-ingest | `/kata:wiki-ingest <source>` | Karpathy | Integrate a source (text + images + custom dimension prompts) |
-| **wiki-search** | `/kata:wiki-search <query>` | Karpathy | Ranked text search; default `--tier=active`; scales to qmd / MCP |
-| **wiki-graph** | `/kata:wiki-graph [modes]` | extension | Structured graph queries — neighbors, shortest-path, hubs, frontmatter filters |
-| wiki-tier | `/kata:wiki-tier` | extension | View/adjust memory-tier distribution, thresholds, pin overrides |
-| **wiki-digest** | `/kata:wiki-digest` | Karpathy | Activity, tier distribution, stale dimensions, coverage gaps |
-| wiki-query | `/kata:wiki-query <question>` | Karpathy | Answer with citations; file back; fallback to external plugins |
-| wiki-lint | `/kata:wiki-lint` | Karpathy | Structure + content + tier/dimension checks + SCHEMA.md evolution |
-| **wiki-session-ingest** | `/kata:wiki-session-ingest` | extension | Capture keeper insights from the active AI CLI session (Claude Code / Codex / others). Incremental by default — second run only picks up new messages. |
-| **wiki-spec** | `/kata:wiki-spec preflight <source>` | extension | Spec History Management — preflight scoring, ingest-time relationship enforcement, lineage tree view. For SDD / superpowers-style spec corpora. |
-| **wiki-skill-create** | `/kata:wiki-skill-create` | extension | Generate a project-local skill that bridges kata's query/ingest with this project's actual work pipeline (code edit / test / build / human verify). Four patterns: issue-fix / feature-build / bug-debug / custom. |
-
-> **Origin column**: "Karpathy" = concept described in the original; "extension" = added by this plugin. Even Karpathy-origin skills have been significantly expanded (image handling, tier filtering, external fallback, etc.)
-
-## How it fits together
-
-Four phases, one source of truth (your markdown files). The human curates what
-goes into `raw/`; the agent owns everything above it.
-
-```mermaid
-flowchart TD
-    classDef bootstrap fill:#d9e8f7,stroke:#4A90D9,color:#0b2a4a
-    classDef growth    fill:#dff5e1,stroke:#4caf50,color:#0b3316
-    classDef query     fill:#fff3cd,stroke:#e0a800,color:#4a3308
-    classDef maint     fill:#fde2e2,stroke:#d9534f,color:#4a0b0b
-    classDef data      fill:#f4f4f4,stroke:#999,color:#222,stroke-dasharray: 3 3
-    classDef human     fill:#ffffff,stroke:#222,color:#222
-
-    User([Human<br/>curator]):::human
-
-    subgraph P1[1 . Bootstrap]
-        INIT[wiki-init<br/>domain · categories · dimensions · tiers]:::bootstrap
-    end
-
-    subgraph P2[2 . Growth / Ingestion]
-        IMPORT[wiki-import<br/>bulk migrate existing docs]:::growth
-        INGEST[wiki-ingest<br/>single source + images]:::growth
-    end
-
-    subgraph DATA[Filesystem — the only source of truth]
-        SCHEMA[(SCHEMA.md<br/>conventions + dimensions + tiers)]:::data
-        RAW[(raw/<br/>immutable sources + assets)]:::data
-        WIKI[(wiki pages<br/>entities · concepts · comparisons · ...)]:::data
-        INDEX[(index.md + log.md<br/>catalog + timeline)]:::data
-    end
-
-    subgraph P3[3 . Query & Exploration]
-        SEARCH[wiki-search<br/>ranked text · tier-filtered]:::query
-        GRAPH["wiki-graph<br/>frontmatter + wikilink structure"]:::query
-        TIER[wiki-tier<br/>view · adjust · pin tiers]:::query
-        DIGEST[wiki-digest<br/>activity · tiers · dimensions · gaps]:::query
-        QUERY[wiki-query<br/>cited answers · external fallback]:::query
-    end
-
-    EXT([External plugins<br/>deepwiki-cli · web search · ...]):::human
-
-    subgraph P4[4 . Maintenance]
-        LINT[wiki-lint<br/>structure + tiers + dimensions + schema]:::maint
-    end
-
-    User -->|curates sources| RAW
-    User -->|edits policy| SCHEMA
-    User -->|asks questions| QUERY
-
-    INIT --> SCHEMA
-    INIT --> INDEX
-
-    IMPORT --> RAW
-    IMPORT --> WIKI
-    IMPORT --> INDEX
-    INGEST --> RAW
-    INGEST --> WIKI
-    INGEST --> INDEX
-
-    WIKI --> SEARCH
-    WIKI --> GRAPH
-    WIKI --> TIER
-    WIKI --> DIGEST
-    WIKI --> QUERY
-    INDEX --> SEARCH
-    INDEX --> DIGEST
-    SCHEMA --> LINT
-    SCHEMA --> TIER
-
-    QUERY -.->|substantive answers<br/>file back as queries/*.md| WIKI
-    QUERY --> INDEX
-    QUERY -.->|local miss| EXT
-    EXT -.->|stdout → raw/external/| RAW
-
-    TIER -.->|adjust thresholds| SCHEMA
-
-    LINT --> WIKI
-    LINT --> INDEX
-    LINT -.->|propose updates| SCHEMA
-```
-
-### Best-practice loops
-
-- **Daily loop** — drop a source in `raw/` → `wiki-ingest` → glance at
-  `wiki-digest --since=1d`. Ten to fifteen pages touch per ingest; that's the
-  compounding effect.
-- **Question loop** — `wiki-search` (or `wiki-graph --neighbors`) to scope
-  → `wiki-query` to answer. Substantive answers **file back** as
-  `queries/*.md` and become new nodes in the graph.
-- **Exploration loop** — `wiki-graph --shortest-path A,B` surfaces **bridge
-  concepts** between two entities you didn't realize were connected. Promote
-  the interesting ones to `comparisons/` via `wiki-query --file`.
-- **Weekly loop** — `wiki-digest` for the state of the wiki, then
-  `wiki-lint` for structure + content gaps + schema-evolution proposals.
-  `wiki-lint --fix` applies the safe ones; you approve the rest.
-- **Golden rule** — SCHEMA.md is authoritative. If the agent wants a new tag
-  or page type, it proposes a SCHEMA.md diff instead of drifting. The wiki
-  stays coherent as it grows.
-
-`wiki-search` vs. `wiki-graph` — use `wiki-search` when you're asking _"what do
-we have on X?"_ (text relevance). Use `wiki-graph` when you're asking _"what is
-connected to X?"_ or _"which pages match these frontmatter properties?"_
-(structure). They complement each other.
-
-### Answer confidence
-
-`wiki-query` should treat confidence as an explicit part of the answer, not as
-an invisible model vibe. The score is an operational confidence estimate: how
-well the wiki supports the answer with relevant, current, citable, actionable,
-and verifiable pages. It is not a probability that the answer is universally
-true.
-
-| Confidence | Range | Meaning | Expected behavior |
-|------------|-------|---------|-------------------|
-| **High** | 0.80-1.00 | The wiki has directly relevant pages, clear citations, current source context, and verification or decision evidence | Answer directly, cite sources, list the verification boundary |
-| **Medium** | 0.50-0.79 | The wiki has useful coverage but is missing some branch/version/platform context, proof, or validation | Answer with caveats, name the missing evidence, suggest a targeted ingest or check |
-| **Low** | 0.20-0.49 | The wiki has only partial context or weakly related pages | Treat as a partial answer; avoid decisive claims; identify the smallest source batch needed |
-| **No answer** | 0.00-0.19 | Search returned nothing relevant, only keyword noise, or stale/conflicting material with no resolution path | Say the wiki cannot answer yet; search external/local sources, then ingest the resulting evidence |
-
-A page match is not automatically an answer. A result that only shares a
-keyword or module name is a **context hit**, not a high-confidence answer. A
-query counts as answered only when the retrieved pages support a concrete next
-step and explain the relevant boundaries.
-
-The same rule applies when the wiki appears to have a strong old answer but the
-queried reality may have changed. In software docs this often appears as a
-requirement or product-rule change; in a general wiki it may be a changed fact,
-policy, price, schedule, API, version, organization, conclusion, or world
-state. If the user explicitly says the truth state changed, `wiki-query` should
-present the old wiki-backed position, the new stated position, the
-contradiction, and the evidence needed before treating the new answer as
-durable. If the user does not say it changed but the query implies a
-contradiction with an existing rule or fact, the agent should ask a short
-confirmation question before giving a decisive answer. An old page match is not
-High confidence when the query may be changing that page's judgment.
-
-Use this checklist when assigning confidence:
-
-- **Relevance** — does it match the specific entity, API, platform, bug shape,
-  or decision being asked about?
-- **Source strength** — is it backed by specs, final reports, reviewed fixes,
-  code paths, or primary notes rather than incidental mentions?
-- **Freshness** — does it match the current repo, branch, base/default branch,
-  version, release context, or other time-sensitive truth state?
-- **Actionability** — can the answer guide the next edit, investigation,
-  review, or decision?
-- **Verifiability** — does it include tests, manifests, logs, reproduction
-  steps, review outcomes, or other evidence that can be checked?
-
-### Query-to-ingest closed loop
-
-This is the canonical dogfood loop for turning a question into durable wiki
-knowledge. The new material does not have to be a new knowledge domain: it can
-be a fresh fix record, review note, development log, test result, generated
-artifact check, or branch-specific decision from the current target repository.
-
-```markdown
-## Query record
-
-Input:
-- User question: "Why does the regional rollout checklist still mention the old approval rule?"
-
-Initial wiki hit:
-- Pages found: [[regional-rollout-approval-query]],
-  [[approval-policy-change-log]]
-- Hit grade: partial answer
-- Confidence: 0.62 (Medium)
-
-Gap:
-- The wiki explains the old approval boundary, but not the latest policy note
-  or the exact verification evidence for this rollout.
-
-Possible changed truth state:
-- If the user says the requirement changed, record both the old wiki rule and
-  the new stated rule before solving.
-- If the user does not say it changed but the requested behavior contradicts
-  the wiki, ask for confirmation first.
-- In non-code domains, use the same pattern for changed facts, policies, prices,
-  schedules, APIs, versions, organizations, conclusions, or world states.
-
-While solving:
-- Ask the agent or LLM doing the fix to save a short, ingestible record in the
-  target repo: problem, root cause, changed files, decision boundaries, tests,
-  generated artifacts checked, and remaining risks.
-- Prefer durable files such as fix notes, review summaries, final reports, or
-  test logs over chat-only memory.
-
-Curated import:
-- Search the target repo docs/code/history for only the missing cluster.
-- Import or ingest the new fix/development records that explain the gap.
-- Use a small curated batch, not the whole repository.
-- Prefer `wiki-ingest` for one file and `wiki-import` for a small curated folder.
-
-Distilled query:
-- Run `wiki-query --file` to create or update `queries/{descriptive-name}.md`.
-- The filed query includes the final answer, sources used, missing evidence,
-  verification checklist, and reusable entry points.
-
-Post-check:
-- Re-run `wiki-search` to confirm the new answer is retrievable.
-- Run `wiki-graph` / `wiki-lint` to catch broken links or structural drift.
-- Commit and push the wiki so the knowledge update is reviewable and durable.
-
-Reusable:
-- yes, if the filed query becomes the first page to read for the next similar
-  bug or decision.
-- no, if it was a one-off lookup with no generalizable boundary or lesson.
-```
-
-For software dogfood, this loop should also record whether the answer depended
-on repo, branch, base branch, default branch, generated artifacts, or a promote
-decision. A same-repo bugfix or development log can be the missing source of
-truth; branch-aware context is part of answer confidence.
-
-When confidence is below High, `wiki-query` should also guide the user to make
-the solving agent preserve the missing evidence as documentation. The user does
-not need to write wiki pages; they only need to keep the fix/development record
-somewhere durable so the wiki maintainer can ingest it.
-
-## Quick start
-
-```
-# 1. Initialize — wiki-init is INTERACTIVE: it asks about your domain and
-#    proposes categories that fit. For a software project, it'll suggest
-#    modules/features/bugs/decisions/queries/lessons. For research,
-#    entities/concepts/comparisons. For fiction, characters/plot/themes.
+# 1. 初始化——交互式，会问你的领域，提出适配的分类
 /kata:wiki-init --path=~/.llm-wiki/my-project --domain="Electron + native SDK"
 
-# 2. git init is suggested automatically — the wiki is a git repo by default,
-#    version history + multi-machine sync via wiki-sync for free.
-
-# 3. Ingest your first source (a docs file, ARCHITECTURE.md, a bug writeup —
-#    images auto-downloaded to raw/assets/; cross-references written in)
+# 2. 摄入第一个来源——图片自动存到 raw/assets/，交叉引用自动写入
 /kata:wiki-ingest docs/ARCHITECTURE.md
 
-# 4. See what was compiled — pages created, edges added, suggested next ingests
+# 3. 看看编译出了什么——新建的页、新增的边、建议的下一批 ingest
 /kata:wiki-digest
 
-# 5. Ask a real maintainer-decision question; the answer files back as a new
-#    hub page that future agents read before they write code
-/kata:wiki-query "what's our IPC topology between Electron renderer and native SDK?"
+# 4. 问一个真正的决策问题——回答会归档成 hub 页，未来的 agent 先读它再动手
+/kata:wiki-query "Electron renderer 和 native SDK 之间的 IPC 拓扑是什么？"
 
-# 6. Explore the graph around a page (BFS over [[wikilinks]])
+# 5. 探索图（BFS 走 [[wikilinks]]）
 /kata:wiki-graph --neighbors attention --depth=2 --format=mermaid
 
-# 7. Check memory tier distribution
-/kata:wiki-tier --show
-
-# 8. Ask a question — substantive answers file back as queries/{name}.md
-/kata:wiki-query "How does flash attention differ from standard attention?"
-
-# 9. Periodic health check (structure + content gaps + schema evolution)
+# 6. 周期性体检
 /kata:wiki-lint
 ```
 
-## Common workflows
+## 18 个 skill 一览
 
-Examples below use Claude Code slash commands. In Codex CLI or standalone mode,
-use the same skill names without the `/kata:` prefix.
+| Skill | 调用 | 一句话 |
+|---|---|---|
+| wiki-init | `/kata:wiki-init` | 交互式启动：问域、提分类、写 SCHEMA.md、建 index.md/log.md |
+| wiki-import | `/kata:wiki-import <path>` | 批量导入已有文档系统（Obsidian/Notion/Confluence/文件夹），去重、断点续传，5 阶段 |
+| wiki-ingest | `/kata:wiki-ingest <source>` | 单条来源入库：存原文+图片、按 SCHEMA.md 建/改页、更新 index.md 和 log.md |
+| wiki-search | `/kata:wiki-search <query>` | 关键词/标签/类型排序检索，默认只看 active 层，可扩展到 qmd/MCP |
+| wiki-graph | `/kata:wiki-graph [模式]` | 把 wiki 当图查：邻居遍历、最短路径、hub/孤儿检测、frontmatter 过滤——不维护图数据库 |
+| wiki-tier | `/kata:wiki-tier` | 查看/调整 active-archived-frozen 三层记忆阈值，手动 pin 覆盖 |
+| wiki-digest | `/kata:wiki-digest` | 每周体检：活跃度、分层分布、内容缺口、跨簇综合、建议下一步 |
+| wiki-query | `/kata:wiki-query <question>` | 带引用回答，报告显式置信度，可回填成页面，本地 miss 时可回退外部插件 |
+| wiki-lint | `/kata:wiki-lint` | 结构检查（孤儿/断链/frontmatter/陈旧/分层/维度完整性）+ 内容缺口 + SCHEMA.md 演进建议 |
+| wiki-config | `/kata:wiki-config` | SCHEMA.md 的统一读写口——`--show`/`--get`/`--set`/`--explain`/`--validate`，按路径操作 |
+| wiki-dream | `/kata:wiki-dream` | auto-dreaming：重新评估冻结/归档页，相关性回升就建议复活，只读文件系统 |
+| wiki-watch | `/kata:wiki-watch` | 监听 `raw/` 下的新文件排队；drain 才真正 ingest——自己绝不调用 wiki-ingest |
+| wiki-sync | `/kata:wiki-sync` | 多机 git 同步：log.md 自定义合并驱动 + 本地锁 + force-push 检测 + wiki_id 身份校验 |
+| wiki-spec | `/kata:wiki-spec preflight <path>` | 新 spec 起草前扫描关联旧 spec，让作者声明关系，防止 spec 语料内耗 |
+| wiki-session-ingest | `/kata:wiki-session-ingest` | 把当前 AI CLI 会话里的洞察挑出来、蒸馏进 wiki（增量，只看上次之后的新消息） |
+| wiki-mcp-server | `/kata:wiki-mcp-server` | 把这个 wiki 起成只读 MCP server，供其它 MCP client 或另一个 kata 联邦查询 |
+| wiki-federate | `/kata:wiki-federate search <query>` | 跨 wiki 联邦查询：向 `.federation.yaml` 里的 peer kata 只读查询，按来源合并结果 |
+| wiki-skill-create | `/kata:wiki-skill-create` | 生成项目本地 skill，把 kata 的 query/ingest 接进这个项目真实的写代码/测试/验证流水线 |
 
-### 1. Ingest a single document
+日常怎么串起来用（四个循环，不是四条独立命令）：
 
-```bash
-# A URL
-/kata:wiki-ingest https://example.com/article
+- **每日循环** — 素材丢进 `raw/` → `wiki-ingest` → 扫一眼 `wiki-digest --since=1d`。
+- **提问循环** — `wiki-search`（或 `wiki-graph --neighbors`）定位 → `wiki-query` 回答；
+  有价值的回答自动回填成 `queries/*.md`，变成图里的新节点。
+- **探索循环** — `wiki-graph --shortest-path A,B` 找两个实体之间你没意识到的桥接概念。
+- **每周循环** — `wiki-digest` 看整体状态，`wiki-lint` 找结构/内容缺口和 schema 演进建议。
 
-# A local file
-/kata:wiki-ingest ~/Downloads/attention-is-all-you-need.pdf
+## 它做不到什么 / 边界的真实情况
 
-# Skip the discussion step in more automated flows
-/kata:wiki-ingest ~/notes/meeting-2026-05-08.md --no-discuss
-```
+这一节不是免责声明——以下每一条要么是已兑现的安全边界（卖点），要么是如实的限制。
 
-Use this when you have one source to add: a web page, PDF, markdown file, text
-file, or pasted text. `wiki-ingest` saves the raw source into the appropriate
-`raw/` subdirectory, downloads referenced images unless `--no-images` is set,
-checks what pages already exist, then creates or updates wiki pages, `index.md`,
-and `log.md`.
+**已兑现的边界：**
 
-If SCHEMA.md defines custom dimensions, `wiki-ingest` prompts for them unless
-you pass values up front:
+- **联邦查询跨边界只读**——kata 从不写 peer wiki。`wiki-mcp-server` 只暴露
+  `wiki-search` / `wiki-graph` 的只读子集 / `wiki-spec-preflight`（只给候选，不暴露
+  `--enforce`）；`wiki-ingest`、`wiki-import`、`wiki-tier --pin`、`wiki-dream --apply`
+  从不通过 MCP 暴露。
+- **`wiki-watch` 自己绝不调用 `wiki-ingest`**（源码注释原话）——drain 永远是显式的人工步骤，
+  一个配置错误的 watcher 不可能静默改动 wiki 页面。
+- **外部兜底插件拒绝 `command_template` 与 shell 元字符**——v1.4 起只认 `argv:` 令牌数组，
+  不经过 shell；`auto_run` 默认要求人工确认才执行。
+- **`wiki-sync` 的 `wiki_id` 一旦不一致就 abort**，import 进行中会拦住 sync，force-push
+  会被检测出来（不会静默吞掉历史重写）。
+- **spec 自动传播（Phase 3）是 opt-in 的 preview，默认关闭**——因为它还不能在源 spec
+  后来被编辑撤销 supersession 时自动反向撤销。
 
-```bash
-/kata:wiki-ingest ~/notes/q2-review.md --set project=alpha,owner=ops
-```
+**如实的限制（不粉饰）：**
 
-### 2. Bulk-import an existing document collection
+- **wiki 根路径解析没有天花板。** 无论是找带 `SCHEMA.md` + `log.md` 的祖先目录，还是找
+  `.llm-wiki.yaml` / `.kata.yaml` 绑定文件，`plugin/scripts/wiki_lib.py` 里的实现都是
+  `for cur in (start, *start.parents)`——一路走到文件系统根，没有类似 git 的
+  `GIT_CEILING_DIRECTORIES` 天花板。一个放错位置的绑定文件会静默地把深层项目重定向到别的
+  wiki。这条**不是笔误而是被依赖的行为**——「同一台机器，多个 wiki」里的嵌套覆盖用法
+  正是靠它从任意深的子目录找到 monorepo 根上的绑定，所以本轮没有加天花板，
+  只登记在 `docs/ISSUE-project-binding-unbounded-ancestor-walk.md`。
+  代价是真实的：kata 自己的测试套件曾因此在任何装了 kata 的机器上跑不完（v2.16.0 前），
+  修法是把测试 fixture 挪出项目祖先链，而不是给解析器加天花板。
+- **dogfood 的 retrospective 从未回填。** `docs/dogfood-v1.6.md` / `docs/dogfood-v1.8.md`
+  里的 retrospective、累计指标、GA 决策章节全是没填的模板占位符，从 v1.6 一路到 v2.15.5
+  都没人回填过。有 dogfood 记录，但不要把它读成有 GA 结论。
 
-```bash
-# Initialize the target wiki once
-/kata:wiki-init --path=~/company-wiki --domain="internal platform docs"
+## 核心概念
 
-# Preview mapping + dedup before writing
-/kata:wiki-import ~/exports/notion --format=notion --dry-run
+### 分层模型
 
-# Run the real migration
-/kata:wiki-import ~/exports/notion --format=notion
-```
+| 层 | 是什么 |
+|---|---|
+| **Base** | [Karpathy 的 LLM-Wiki 构想](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)——编译一次、保持更新；人类策展，LLM 维护；一切都可选、可拼装。 |
+| **Core** | 一个**自我演化的知识系统**：(1) 自闭环——ingest → 交叉链接 → 归档问题 → 复合增长的页面；(2) auto-dreaming——冻结页在相关性回归时重新浮现。 |
+| **Phase 1**（当前） | **AI 结对编程。** 用 core wiki 编译项目的业务语义——阈值、生命周期不变量、领域惯例——让 AI agent 动手前先读懂项目惯例。v1.4 → v1.13 都在做这件事。 |
+| **Phase 1+**（已发布） | **Spec History Management（v1.13）** 与 **Work-Loop Bridge（v1.15）**——见下面「接进你的工作流」。 |
+| **Phase 2**（已设计，未实现） | **团队 spec 起草 + 分歧裁决。** 让未来的决策不用重新打一遍已经打过的架。 |
+| **Phase 3+** | 开放。核心随着我们摸清楚什么会复合而继续扩展边界。 |
 
-Use this when the material already exists outside the wiki: a Notion export, an
-Obsidian vault, a Confluence dump, or a directory of markdown/text files.
-`wiki-import` scans the whole tree, infers structure, deduplicates against
-existing pages, and stores immutable originals under `raw/imported/`.
+**产品**是 Core + 各 Phase 的延伸，Phase 1 只是第一个具体边界，不是 kata 的定义。
 
-### 3. Resume an interrupted import or rerun an updated export
+### SCHEMA.md 是唯一权威配置
 
-```bash
-# Continue an interrupted bulk import from its checkpoint
-/kata:wiki-import --resume
+所有约定——页面类型、frontmatter 字段、标签分类法、页面创建策略、交叉引用策略、页面大小
+限制、日志滚动、**自定义维度**、**记忆分层阈值**——都活在 `{wiki_path}/SCHEMA.md`。插件
+读取并执行 SCHEMA.md，而不是把意见硬编码进代码。
 
-# Re-scan an updated export safely
-/kata:wiki-import ~/exports/notion --format=notion --dry-run
-/kata:wiki-import ~/exports/notion --format=notion
-```
-
-Use `--resume` only when a previous import was interrupted and
-`.wiki-import-checkpoint.json` exists in the wiki root. For a fresh rerun, keep
-the wiki working tree clean first (`git commit` or `git stash`), inspect the
-plan with `--dry-run`, then run the real import. The import flow deduplicates
-and merges against existing pages; you do not need to start a second wiki just
-to re-scan the same corpus.
-
-### 4. Drop many files into `raw/`, then ingest deliberately
-
-```bash
-# Start the watcher once
-/kata:wiki-watch --start
-
-# After copying files into raw/articles, raw/papers, or raw/external
-/kata:wiki-watch --status
-/kata:wiki-watch --drain
-```
-
-Use this when files are already in `raw/` and you want a queue plus a final
-review step before the wiki changes. The watcher never mutates pages on its own;
-`--drain` is the explicit handoff to `wiki-ingest`.
-
-### 5. Distill query results into a new downstream wiki
-
-```bash
-# In the source wiki, force-file the synthesis you want to keep
-/kata:wiki-query "What patterns recur across these launches?" --file
-/kata:wiki-query "Compare agent memory approaches" --file --format=table
-
-# Create a new target wiki for the distilled knowledge
-/kata:wiki-init --path=~/agent-patterns-wiki --domain="agent product patterns"
-
-# Import the filed syntheses, or a curated folder containing them
-/kata:wiki-import ~/source-wiki/queries --format=markdown
-```
-
-`wiki-query --file` turns a good answer into a first-class wiki page under
-`queries/`. If the goal is to build a smaller, more distilled downstream wiki,
-treat those filed query pages, plus any curated `comparisons/` or canonical
-pages, as the source corpus for a new `wiki-import`. If you only need the
-synthesis in the same wiki, stop at `wiki-query --file`; no second wiki is
-needed.
-
-## Wiki structure (starter)
-
-Categories are not hardcoded — `wiki-init` proposes them based on your domain.
-
-```
+```text
 {wiki_path}/
-├── SCHEMA.md              # Conventions, dimensions, tiers, policies (USER-EDITABLE)
-├── .wiki-plugins.yaml     # External plugin registry (optional)
-├── index.md               # Content catalog with one-line summaries
-├── log.md                 # Append-only action log
-├── raw/                   # IMMUTABLE source material
-│   ├── articles/
-│   ├── papers/
-│   ├── transcripts/
-│   ├── assets/            # Downloaded images (auto-saved during ingest)
-│   ├── imported/          # Immutable originals from wiki-import
-│   └── external/          # Plugin output (auto-saved during query fallback)
-└── {categories}/          # Defined by SCHEMA.md — fits your domain
-                           # Research:  entities/, concepts/, comparisons/, queries/
-                           # Book:      characters/, themes/, plot/, timeline/
-                           # Business:  people/, projects/, decisions/, meetings/
-                           # Personal:  journal/, topics/, patterns/, queries/
+├── SCHEMA.md          # 约定 + 维度 + 分层策略（用户可编辑）
+├── index.md           # 内容目录，一行摘要
+├── log.md             # 追加式操作日志
+├── raw/                # 不可变原始素材（articles/papers/transcripts/assets/imported/external）
+└── {categories}/       # 由 SCHEMA.md 定义，贴合你的领域
+                        # 研究: entities/ concepts/ comparisons/ queries/
+                        # 业务: people/ projects/ decisions/ meetings/
 ```
 
-**SCHEMA.md is authoritative.** All conventions — page types, frontmatter fields,
-tag taxonomy, page creation policy, cross-reference policy, page size limits, log
-rotation, **custom dimensions**, and **memory-tier thresholds** — live there.
-`wiki-init` writes a starter based on your domain; `wiki-lint` proposes updates
-over time. The plugin reads and enforces SCHEMA.md rather than hardcoding opinions.
+`wiki-config` 是它的通用读写口（`show`/`get --path`/`set --path --value`/`explain --path`/
+`validate`），只做既有标量键的手术式替换，schema 校验失败自动回滚；新增键或新增 YAML 块
+仍需手改 SCHEMA.md 或重跑 `wiki-init`。`wiki-tier`、`wiki-init` 各自的领域快捷方式仍然存在，
+`wiki-config` 补的是长尾场景。
 
-## Custom frontmatter dimensions
+### 记忆分层（active / archived / frozen）
 
-> Extension — Karpathy mentions frontmatter but doesn't specify extensibility.
+| 层 | 默认窗口 | 行为 |
+|---|---|---|
+| **active** | < 1 年 | 默认查询面——所有 skill 都返回 active 层结果 |
+| **archived** | 1–2 年 | 通过 `--tier=archived` 或 `--tier=all` 访问 |
+| **frozen** | > 2 年 | 冷存储——auto-dreaming 定期回访 |
 
-SCHEMA.md's `custom_dimensions:` block lets you declare domain-specific
-frontmatter fields — `version:` for software, `venue:` for research papers,
-`mood:` for journals. Each dimension has a type, description, and `refresh_on`
-schedule that controls when the agent prompts you for the value:
+分层是从 `published_at`（兜底 `ingested_at`）**实时计算**的，从不写进 frontmatter——阈值一改
+立刻生效。一个页面的层 = 它引用的所有来源里最新的那个层。`tier_override:` 支持手动 pin。
+
+```bash
+/kata:wiki-tier --show
+/kata:wiki-tier --preview --set-active=540d
+/kata:wiki-tier --pin=concepts/attention.md:active
+```
+
+### 自定义 frontmatter 维度
+
+SCHEMA.md 的 `custom_dimensions:` 块声明领域专属的 frontmatter 字段——软件项目的 `version:`、
+研究论文的 `venue:`。每个维度有类型、说明、`refresh_on` 调度（何时该重新问用户这个值）：
 
 ```yaml
 custom_dimensions:
   - name: version
     type: string
-    description: "Which product version does this source describe?"
     required: true
-    refresh_on: [ingest, import]    # prompt every time a new source arrives
-    applies_to: null                # null = all page types
+    refresh_on: [ingest, import]
 ```
 
-- `wiki-ingest` / `wiki-import` — prompt per `refresh_on` schedule; `--set key=value` skips prompting
-- `wiki-digest` — surfaces pages with stale values (for `refresh_on: [digest]`)
-- `wiki-lint` — validates completeness and enum range
-- `wiki-graph --query` / Obsidian Dataview — custom dimensions are queryable like any frontmatter
+`wiki-ingest`/`wiki-import` 按 `refresh_on` 提示（`--set key=value` 跳过提示）；`wiki-digest`
+标出陈旧值；`wiki-lint` 校验完整性和枚举范围；`wiki-graph --query` / Obsidian Dataview 把它们
+当普通 frontmatter 查询。
 
-## Memory tiers (active / archived / frozen)
+### auto-dreaming：睡着的时候 wiki 在干嘛
 
-> Extension — Karpathy notes "stale content" in lint but doesn't propose a temporal model.
-
-Raw content ages. The wiki distinguishes three tiers to keep queries focused:
-
-| Tier | Default window | Behavior |
-|------|---------------|----------|
-| **active** | < 1 year | Default query surface — all skills return active-tier results |
-| **archived** | 1–2 years | Accessible via `--tier=archived` or `--tier=all` |
-| **frozen** | > 2 years | Cold storage — future auto-dreaming (v2) will revisit |
-
-Tiers are computed **on-the-fly** from `published_at` (fallback `ingested_at`)
-— never stored as frontmatter. Threshold changes take effect instantly. A wiki
-page's tier = most-recent-tier across its cited sources (any active source pulls
-the page into active). Manual `tier_override:` pins are supported.
+冻结内容不必永远冻着——收购的公司、复活的架构、被重新引用的经典论文。`wiki-dream` 按周期
+（或你设的节奏）跑，只读 `log.md` + 页面 frontmatter 日期（`ingested_at`/`updated`），**从不
+读文件 mtime 或聊天会话**，所以 `git clone` 到任何机器都能复现同样的 dreamer 行为。
+v1.6 用 `co-occurrence` 策略，Precision ≥ 0.7、recall ≥ 0.5 在 CI 里被 gate 住。其它策略
+（citational/structural/temporal）留给 v1.8+。有 dogfood 记录见 `docs/dogfood-v1.6.md`，但
+它的 retrospective 章节从未回填——见上面「它做不到什么」。
 
 ```bash
-# View distribution
-/kata:wiki-tier --show
-
-# Push active window to 18 months and preview the effect
-/kata:wiki-tier --preview --set-active=540d
-
-# Pin a canonical reference as permanently active
-/kata:wiki-tier --pin=concepts/attention.md:active
+/kata:wiki-dream                          # 落在 dreaming/{date}.md
+/kata:wiki-dream --apply --pages 1,3,5    # 复活选中的候选
 ```
 
-## Save what you figured out in a session
+### 外部兜底插件
 
-> Extension — closes the gap between "what I just figured out" and
-> "what's in the wiki tomorrow."
-
-After two hours of debugging with Claude Code or Codex, the keeper insights
-— the actual root cause, the rejected alternatives, the decision boundary —
-live inside the chat transcript. By the time you remember to write any of
-it down, half is gone.
-
-`wiki-session-ingest` reads your current session, ranks candidate knowledge
-points by confidence, lets you multi-select the keepers, and distills each
-through the standard `wiki-ingest` pipeline (page write, cross-links,
-log entry, the works). You decide what's worth keeping; kata handles the
-bookkeeping.
-
-```bash
-# End of a deep session — pick which insights to keep from a short list
-/kata:wiki-session-ingest
-
-# Call it again later in the same session — only NEW messages since
-# last capture are surfaced (incremental by default, v2.14.0+)
-/kata:wiki-session-ingest
-
-# Force a fresh sweep of the whole session from message #1
-/kata:wiki-session-ingest --full
-```
-
-**Smart sweep, not full reparse (v2.14.0+).** Re-running on the same
-session only looks at messages added since last capture — no duplicate
-candidate work, no re-presenting the points you already decided to skip.
-The dump file's filename stays stable across days too, so a multi-day
-session doesn't fragment into per-day files.
-
-**Works with**:
-- **Claude Code** + **Codex CLI** — JSONL transcript adapters, automatic
-- **Gemini / Copilot / OpenCode / Kimi / any other CLI** — LLM-dump
-  fallback where the active agent writes its own session summary
-
-**Privacy reminder**: the raw session dump is markdown in your wiki repo,
-so it ships through `wiki-sync`. Eyeball it before syncing if the session
-touched secrets — a `--scrub-secrets` flag is on the v1.12 candidate list.
-
-## Keep your spec corpus from drifting
-
-> Extension — for spec-driven-development (SDD) / superpowers-style flows
-> that produce many specs over time.
-
-Spec-driven development works until the spec corpus accumulates for six
-months and no one can tell which spec is canonical for a given area. New
-specs silently overlap with old ones. Old specs that should be archived
-stay surfaced. Redesign decisions get re-litigated because the prior
-decision was buried two folders deep.
-
-`wiki-spec` adds three checkpoints to your ingest flow:
-
-```bash
-# At ingest time: scan for related prior specs (Phase 0 — advisory)
-/kata:wiki-spec preflight raw/new-spec.md
-
-# Same, but block ingest until the author declares how this spec
-# relates to the prior ones (Phase 2 — configurable via SCHEMA.md)
-/kata:wiki-ingest raw/new-spec.md      # auto-runs preflight + enforcement
-
-# Visualize the lineage from any spec (Phase 4 — v2.13.0)
-/kata:wiki-graph --mode spec-history --seed decisions/F017-new-auth.md
-```
-
-The author declares relationships in the new spec's frontmatter using a
-short vocabulary — `supersedes`, `refines`, `extends`, `parallel`,
-`contradicts` — and those become part of the queryable graph. The
-lineage view renders as ASCII tree, JSON, or Mermaid graph — pick the
-format that fits where the team consumes it (terminal / wiki page /
-chat).
-
-```yaml
-# In the new spec's frontmatter
-spec_relationships:
-  - kind: supersedes
-    target: decisions/F015-old-auth.md
-    note: "F015 fully replaced; new token model"
-  - kind: refines
-    target: decisions/F011-merge-back.md
-    note: "lane discipline still applies"
-```
-
-**Phase 3 (auto-propagation) is opt-in preview.** When the author
-declares `kind: supersedes`, kata can automatically banner the superseded
-spec + flip it to archived + write a reverse-link. The v2.13.x
-implementation ships default-off because it can't yet reverse itself
-when the source spec is later edited to drop the supersession. The
-transactional reland is tracked in
-[`docs/PRD-v1.14-spec-propagation-reconcile.md`](docs/PRD-v1.14-spec-propagation-reconcile.md).
-
-**Cross-wiki**: spec relationships can target peer wikis via
-`kata://<peer>/<path>` URIs (v1.12 federation). kata never writes to peer
-wikis — federation contract is read-only — but it records the supersession
-in a local `.spec-reverse-index.yaml` that the lineage view walks.
-
-## Wire kata into your actual work pipeline
-
-> Extension — extends kata's reach from the documentation loop into the
-> code-edit / test / verify loop. The third concrete reach into
-> AI-paired engineering, alongside spec-corpus integrity (above) and
-> session capture (below).
-
-Kata's wiki closes the documentation loop — ingest, cross-link, query,
-file-back. But the **actual work** — searching source, modifying code,
-running tests, verifying the fix — happens outside that loop. Whether
-to re-enter the wiki afterward is voluntary. The compounding effect
-that makes kata kata depends on individual discipline at exactly the
-moment when discipline is hardest to muster.
-
-`wiki-skill-create` generates a **project-local skill** that wraps
-kata's query/ingest with your project's actual work pipeline into one
-closed loop. The generated skill becomes the default entry point for
-that kind of work in that project — consult-before / file-back-after
-is now the structural shape, not a discipline you have to remember.
-
-```bash
-# Interactive: pick a pattern, name the skill, confirm placement
-/kata:wiki-skill-create
-```
-
-**Four MVP patterns** — pick the one that fits how the work in your
-project actually shapes up:
-
-| Pattern | Encoded loop |
-|---|---|
-| `issue-fix` | Problem → kata query → source search → minimal edit → test → human verify → wiki-ingest |
-| `feature-build` | Feature → kata query → spec draft → `wiki-spec preflight` → implement → verify → file back both spec AND impl learnings |
-| `bug-debug` | Bug → reproduce → kata search (by symptom AND by mechanism) → root cause → fix + regression test → file back as lesson with root cause as dominant content |
-| `custom` | Your loop description → kata wraps it with query / human-gate / file-back bookends |
-
-**What gets generated**: a SKILL.md at `<project>/.claude/skills/<your-name>/SKILL.md`
-(default; `--target codex` writes to `~/.codex/skills/` instead). The
-file is checked into your project's git repo. It encodes the 7-step
-loop using your project's detected test/build/lint commands and the
-bound kata wiki path. A sentinel comment at the bottom marks it as
-kata-generated so future tooling can find it (`<!-- kata:generated-skill ... -->`).
-
-**Discovery is automatic**:
-
-- Tech stack: `package.json` → npm scripts; `Cargo.toml` → cargo
-  commands; `pyproject.toml` → pytest; `go.mod` → `go test ./...`;
-  multi-stack projects keep the full list
-- Project name: pulled from the manifest (`package.json.name`,
-  `[package].name` in Cargo.toml, `module` line in go.mod), falling
-  back to git root directory name
-- Kata wiki binding: same `find_wiki_root()` resolution as every
-  other kata skill — automatic if a wiki is bound, placeholder
-  otherwise
-
-**The 9 verification checks** (run after every render):
-frontmatter parses; required fields present; name format
-`^[a-z][a-z0-9-]*$`; ≤ 1024 chars of frontmatter; description starts
-with "Use when"; third-person only (no `I/we/my/our`); sentinel
-comment present; no unresolved `{{VAR}}`; argument-hint present when
-user-invocable. Failures don't auto-fix — the user sees what's wrong
-and chooses whether to regenerate.
-
-**Customization after generation**: the SKILL.md is yours. Edit it as
-your project's work shape evolves — add a deploy phase, swap
-`wiki-ingest` for `wiki-session-ingest`, adjust kata search strategy.
-The sentinel comment is the only machine-managed part. Future kata
-versions will add a `--update <name>` workflow (v1.16) that preserves
-your customizations.
-
-See [`docs/PRD-v1.15-work-loop-bridge.md`](docs/PRD-v1.15-work-loop-bridge.md)
-for the full design, including rationale for each pattern and the
-strategic positioning of the work-loop bridge alongside spec-history
-management (v1.13) and session ingest (v1.11).
-
-## Auto-ingest from raw/ (the watcher)
-
-> Extension — closes the "I dropped a file but forgot to ingest" gap.
-
-Drop a file into `raw/articles/` (Web Clipper, `curl`, drag-and-drop) and
-the watcher daemon enqueues it for ingestion. When you next open Claude
-Code, `/wiki-watch --status` tells you what's pending; `--drain` processes
-the whole queue in one command.
-
-Detection is filesystem-only — the watcher reads `raw/` mtimes and nothing
-else. **Drain is always explicit**: a misconfigured watcher cannot
-silently mutate wiki pages because the script never invokes `wiki-ingest`
-itself, only the skill does.
-
-```bash
-# Start the daemon (5s polling, 5s debounce — Web-Clipper-friendly)
-/kata:wiki-watch --start
-
-# Status anytime — works whether daemon is running or not
-/kata:wiki-watch --status
-
-# Process all pending files
-/kata:wiki-watch --drain
-
-# Stop the daemon
-/kata:wiki-watch --stop
-```
-
-For headless use (cron, systemd, launchd, Task Scheduler), see
-[`docs/watcher.md`](docs/watcher.md).
-
-## Auto-dreaming
-
-> Extension — the only kata feature that runs without you.
-
-Frozen content doesn't have to stay frozen. As you ingest new sources,
-old pages may become relevant again — an acquired company, a revived
-architecture, a cited classic paper. Auto-dreaming runs weekly (or on the
-cadence you set), reads the log.md increment since its last watermark,
-and surfaces frozen/archived pages whose relevance score crossed the
-threshold.
-
-Filesystem-only by design: it reads `log.md` + page frontmatter dates
-(`ingested_at` / `updated`), never file mtimes or chat sessions. So
-`git clone` reproduces dreamer behavior on any machine — frontmatter is
-in git, mtimes are not.
-
-```bash
-# Weekly run lands in dreaming/{date}.md for your morning review
-/kata:wiki-dream
-
-# Promote selected candidates back to active tier
-/kata:wiki-dream --apply --pages 1,3,5
-
-# Why was X suggested (or not)?
-/kata:wiki-dream --explain mosaic
-```
-
-v1.6 ships with the `co-occurrence` strategy benchmarked under the
-`market_research` fixture id, with the first dogfood template narrowed
-to LLM application innovation: products, frameworks, patterns, research
-briefs, and filed-back discussions. Precision ≥ 0.7 and recall ≥ 0.5
-are gated in CI. Other domains and strategies (citational, structural,
-temporal) land in v1.8+. See [`docs/dreaming.md`](docs/dreaming.md) for
-full design and [`docs/dogfood-guide-v1.6.md`](docs/dogfood-guide-v1.6.md)
-for the dogfood loop.
-
-> **Dogfood status (updated 2026-05-15):** v1.6 (dreaming) is **Week 1
-> of 4 on the NECallKit wiki** (started 2026-05-08). 7/7 daily runs
-> have completed cleanly; 1 candidate-burst day (2026-05-12) surfaced
-> 7 candidates, 1 effectively accepted via `tier_override: active`.
-> Effective Week-1 accept rate: 14% (below PRD §4's 60% gate; the
-> finding so far is that the accept primitive `--apply` may not match
-> the actual user-intent channel — see `docs/dogfood-v1.6.md` for the
-> channel-mismatch analysis). v1.8 (sync) is in parallel observation.
-> CI gates are green on both. Window closes ~2026-06-05; retrospective
-> + GA decision follow that. See
-> [`docs/dogfood-v1.6.md`](docs/dogfood-v1.6.md) (dreaming) and
-> [`docs/dogfood-v1.8.md`](docs/dogfood-v1.8.md) (sync) for full state.
-
-## Multi-machine sync (v1.8 MVP)
-
-> Extension — Karpathy's wiki is a git repo by default, but doesn't say
-> how to keep two laptops aligned. v1.8 adds `wiki-sync`: a custom
-> merge driver for `log.md` (union+sort) plus per-machine sync reports
-> outside the wiki repo to avoid self-conflict.
-
-```bash
-# 1. Bootstrap a sync-ready wiki (fresh)
-/kata:wiki-init --path ~/.llm-wiki/myproject --enable-sync
-# Or upgrade an existing wiki to v1.8:
-python plugin/scripts/wiki_init.py --refresh-id --path ~/.llm-wiki/myproject
-
-# 2. Initialize git and make the bootstrap commit. wiki-init writes
-#    SCHEMA.md / .gitignore / .gitattributes but does NOT init git for you.
-cd ~/.llm-wiki/myproject
-git init -b main
-git add .
-git commit -m "wiki: init"
-
-# 3. Add your remote and push the bootstrap commit
-git remote add origin git@github.com:you/myproject-wiki.git
-git push -u origin main
-
-# 4. Clone on the second machine (replace HOME path as appropriate)
-git clone git@github.com:you/myproject-wiki.git ~/.llm-wiki/myproject
-# Both machines now share wiki_id from SCHEMA.md — sync's identity
-# check will pass.
-
-# 5. Sync interactively (lock + drivers + fetch + merge + push)
-/kata:wiki-sync
-
-# 6. Cron mode (chains with dream; conflict breaks the chain)
-0 23 * * 0  cd ~/.llm-wiki/myproject && wiki-sync --auto && wiki-dream
-
-# 7. Preview without side effects
-/kata:wiki-sync --dry-run
-```
-
-**What v1.8 MVP gives you:**
-
-- `merge_log.py` driver auto-merges `log.md` divergence as union+sort
-  with canonical hash dedup (Files: order canonicalized; Step 1/2 order
-  preserved). Same-triple-different-body kept both with `Sync-side:
-  ours/theirs` annotations
-- Local sync lock (`~/.kata/sync-{slug}.lock`) — same-machine
-  reentry guard; cross-machine race goes through git push retry
-- Force-push detect (compares fetch-pre and fetch-post `origin/<branch>`
-  SHA ancestry) → never silently swallows history rewrite
-- Wiki identity check via `wiki_id` UUID in SCHEMA.md (`## Identity`)
-  — sync aborts on mismatch to prevent merging unrelated knowledge bases
-- Per-machine sync reports under `~/.kata/sync-reports/{slug}/`
-  (NEVER in the wiki repo — by design, so reports never self-conflict)
-- Preflight refuses on active wiki-import (lock + checkpoint), in-flight
-  git merge/rebase/cherry-pick, or held local sync lock
-- `wiki-import` improvements: import-lock, dirty-tree refusal, phase 5
-  single commit + push, success cleanup deletes checkpoint after commit
-  (regardless of push outcome) so sync isn't persistently blocked
-
-**What v1.8-full and v1.9 add:**
-
-- `merge_index.py` driver (section-aware union of `index.md`) — v1.8-full
-- True concurrent-barrier race test (subprocess-level barrier file
-  with role-specific ready signals) — v1.8-full. The current MVP test
-  (`T-sync-16-lite`) uses a sequential pre-push hook that's still strict
-  enough to verify re-fetch + re-merge but isn't physically simultaneous.
-- LFS support for `raw/papers/*.pdf` and the like — v1.9 backlog
-
-See [`docs/PRD-v1.8-sync.md`](docs/PRD-v1.8-sync.md) for the full design
-(7 review rounds, 42 findings closed, MVP ready as of 2026-05-07).
-
-### Onboarding a second machine to an existing wiki
-
-The flow above assumes you bootstrap a fresh wiki and *then* push to a
-remote. The more common real case is that machine A has already been
-ingesting for weeks (your distilled knowledge base) and you now want to
-read/write the same wiki from machine B. Steps:
-
-```bash
-# ──────────── On machine A (the one that already has content) ────────────
-
-# A.1 Make sure everything is committed and pushed.
-cd ~/.llm-wiki/myproject
-git status --short          # must be clean
-git log @{u}..HEAD          # must be empty (no unpushed commits)
-# If not clean: commit pending work; if ahead: git push
-
-# ──────────── On machine B (the new machine) ────────────
-
-# B.1 Install the plugin + Python 3.9+ + (optional) ne-git-commit.
-#     On Windows, default `python` may be 2.7 — verify `py -3 --version`
-#     and use `py -3` (or alias) for the wiki scripts.
-
-# B.2 Clone the wiki into the multi-project layout (~/.llm-wiki/{project}).
-mkdir -p ~/.llm-wiki
-git clone git@github.com:you/myproject-wiki.git ~/.llm-wiki/myproject
-# `wiki_id` in SCHEMA.md comes with the clone — DO NOT edit it by hand.
-# It is what sync's identity check uses to confirm "same wiki, two machines".
-
-# B.3 (Optional) Bind the wiki to your local project directory so kata
-#     resolves it from the project root. Pick ONE of:
-#
-#     a) Per-project file in the project root:
-echo 'wiki_path: ~/.llm-wiki/myproject' > /path/to/myproject/.llm-wiki.yaml
-#
-#     b) Global registry entry (preferred if you have many projects):
-mkdir -p ~/.llm-wiki && cat >> ~/.llm-wiki/registry.yaml <<'EOF'
-projects:
-  myproject:
-    wiki_path: ~/.llm-wiki/myproject
-EOF
-#
-#     Hosting more than one wiki on this machine? Each project repo gets
-#     its own `.llm-wiki.yaml`, or stack multiple entries under
-#     `projects:` in the same registry. See README → "Multiple wikis on
-#     one machine" for nested-binding / submodule examples.
-
-# B.4 Verify by previewing a sync. This also auto-registers the log.md
-#     custom merge driver in machine B's .git/config.
-cd ~/.llm-wiki/myproject
-/kata:wiki-sync --dry-run        # expect: up-to-date
-
-# B.5 You are done. Day-to-day:
-/kata:wiki-sync --dry-run         # before starting work, see if A pushed
-/kata:wiki-sync                   # after committing, push and merge
-```
-
-**Important constraints when running two machines:**
-
-- **Never hand-edit `wiki_id`** in SCHEMA.md. The clone brings it; the
-  identity check refuses the sync if A and B drift. If you must reset
-  the ID, use `wiki-init --refresh-id` and re-init *all* peers.
-- **`dreaming/` does not have a merge driver yet** (v1.8-full / v1.9
-  backlog). If both machines run `wiki-dream` on the same date, both
-  will produce `dreaming/YYYY-MM-DD.md` and you get a normal git
-  conflict. Mitigations: (a) run the dream cron on only one machine,
-  or (b) stagger cron times so machine B picks up A's dream file via
-  sync before its own run starts.
-- **`~/.kata/sync-reports/{slug}/` is per-machine** by design. It is
-  outside the wiki repo so it never self-conflicts. Each machine grows
-  its own log; `rm -r` periodically if you want.
-- **`.wiki-import-lock` / `.wiki-import-checkpoint.json` block sync** —
-  if you stop machine A mid-import, sync on B will refuse until A
-  resolves the import. Run `wiki-import --resume` or clean the
-  checkpoint on A first.
-- **A and B are now both writers**. Stagger heavy ingest sessions, or
-  use `wiki-sync` before/after each work block. Push race is bounded
-  (3 retries, 1/2/4s backoff); beyond that you re-run manually.
-
-If your wiki has private content, your remote should be private too
-(`raw/` is bulk-imported source material, often the most sensitive
-part). The plugin and scripts themselves are open source, but the wiki
-content git repo lives in *your* remote.
-
-## External fallback plugins
-
-> Extension — Karpathy mentions web search for gaps; we generalized to any
-> external CLI tool with a closed-loop ingest pipeline.
-
-When `wiki-query` can't answer from local knowledge, it can call external
-tools registered in `.wiki-plugins.yaml`:
+`wiki-query` 本地找不到答案时，可以调用 `.wiki-plugins.yaml` 里注册的外部工具：
 
 ```yaml
 plugins:
   - name: deepwiki-cli
-    description: "Search target codebase for implementation details"
-    trigger: on_empty         # fire when wiki-search returns 0 hits
-    auto_run: false           # show argv + confirm before executing
-    # argv: literal token list. Each element is one execve argument; no shell.
-    # Substitution is per-token via {query}, {wiki_path}, {date}, vars.*.
-    # Tokens containing shell metachars are refused after substitution.
-    argv:
-      - deepwiki-cli
-      - search
-      - "--repo={repo_path}"
-      - "--query={query}"
-      - "--format=markdown"
-    vars:
-      repo_path: "/path/to/target/repo"
+    trigger: on_empty
+    auto_run: false          # 默认展示 argv 并要求确认
+    argv: ["deepwiki-cli", "search", "--repo={repo_path}", "--query={query}"]
 ```
 
-> **v1.4 breaking change.** The pre-v1.4 `command_template:` (string-then-shell)
-> field was removed because a prompt-injected query could land in `/bin/sh`.
-> v1.4+ refuses to run any plugin that still uses it; migrate to `argv:`.
-> See [`plugin/PLUGINS.md`](plugin/PLUGINS.md) for full migration notes.
+流程：query miss → 插件命令 → stdout 存进 `raw/external/` → `wiki-ingest` 处理 → wiki 页面
+增长 → 未来的查询先命中本地。完整清单格式见 [`plugin/PLUGINS.md`](plugin/PLUGINS.md)。
 
-**Flow**: query miss → plugin command → stdout saved to `raw/external/` →
-`wiki-ingest` processes it → wiki pages grow → future queries hit local first.
+### 设计谱系：源自 Karpathy，这个插件加了什么
 
-The plugin output becomes a new raw source and enters the full ingest pipeline
-(categorization, tagging, cross-referencing, tier-stamping). See `PLUGINS.md`
-for the full manifest specification and more examples.
+| 扩展 | 加了什么 |
+|---|---|
+| **SCHEMA.md 作为权威配置** | 所有约定归一到一个文件，agent 读取并执行，而不是硬编码 |
+| **交互式领域启动** | `wiki-init` 按领域（研究/书籍/业务/个人）提出适配的分类 |
+| **批量导入**（`wiki-import`） | 5 阶段从 Obsidian/Notion/Confluence/文件夹迁移，支持断点续传 |
+| **结构化图查询**（`wiki-graph`） | frontmatter 过滤、BFS 邻居、最短路径、hub/孤儿——不维护持久图数据库 |
+| **三层记忆老化** | active/archived/frozen，从来源日期实时计算 |
+| **外部兜底插件** | 任意 CLI 工具注册为 `wiki-query` 的兜底，走闭环 ingest |
+| **多格式查询输出** | markdown / table / slides（Marp）/ chart（matplotlib）/ canvas（Obsidian） |
 
-## Works with Obsidian
+刻意没做的事：**持久图数据库**（文件系统就是图，扫描几百页只要毫秒级）；**冻结内容自动
+清除**（frozen = 暂存，不是删除）；**基于 embedding 的语义搜索**（交给 qmd，内置的 3-pass
+扫描覆盖 Karpathy 说的 ~100 源的甜蜜点）；**多用户权限控制**（wiki 就是个 git 仓库，用分支和
+PR 协作）。
 
-> From Karpathy — _"Obsidian is the IDE."_
+## 接进你的工作流
 
-The wiki is a drop-in **Obsidian vault** — no conversion needed:
+kata 的文档闭环（ingest → 交叉链接 → query → 回填）本身是闭的，但三条延伸线各自解决一个
+「闭环之外还漏了什么」的问题。
 
-- `[[wikilinks]]` render as clickable
-- **Graph view** shows the shape of the wiki (hubs, orphans, clusters)
-- **Dataview** plugin runs queries over YAML frontmatter (including custom dimensions)
-- **Web Clipper** extension is the fastest way to get web sources into `raw/articles/`
-- **Marp** plugin renders `wiki-query --format=slides` output inside Obsidian
+### 会话结束后别让洞察烂在 chat 里（wiki-session-ingest）
 
-## Git integration
-
-> From Karpathy — _"The wiki directory is just a git repo."_
-
-The wiki is a git repo by default. `wiki-init` suggests `git init` as its final
-step. Every `wiki-ingest` and `wiki-query --file` produces clean diffs. Team
-wikis can use branches for proposed changes before merging.
-
-## Works with
-
-- **Claude Code** — via `.claude-plugin/marketplace.json` + `plugin/.claude-plugin/plugin.json`
-- **Codex CLI** — via generated skills under `~/.codex/skills` (see `scripts/install_codex_skills.py`)
-- **Any LLM** — copy `SKILL.md` as a standalone prompt
-- **Obsidian** — as a vault (read-only for you, read-write for the LLM)
-
-## Scaling
-
-> From Karpathy — he explicitly mentions qmd and suggests vibe-coding a search
-> script as the need arises.
-
-- **< 100 pages** — built-in `wiki-search` (index + frontmatter + content scan)
-- **100–500 pages** — same, but run `wiki-lint` often to keep `index.md` current
-- **500–2000 pages** — install [qmd](https://github.com/tobi/qmd) (BM25 + vector
-  hybrid with LLM re-rank); `wiki-search` auto-detects and shells out
-- **2000+ pages** — qmd in MCP server mode; agent calls directly
-
-## Contributing
-
-If you're hacking on the plugin scripts or skills:
+两小时调试之后，真正值钱的东西——根因、被否决的备选方案、决策边界——都在会话记录里，
+等你想起来写下来时已经忘了一半。`wiki-session-ingest` 读当前会话，按置信度给候选知识点
+排序，让你多选想留的，逐个走标准 `wiki-ingest` 流水线蒸馏进 wiki。
 
 ```bash
-# Enable the smoke-test pre-commit hook
-git config --local core.hooksPath .githooks
-
-# Run smoke tests manually (matches CI)
-python tests/run_smoke.py
-
-# Regenerate the autogenerated skill table after adding a new skill
-python scripts/build_skill_md.py
+/kata:wiki-session-ingest          # 增量：只看上次捕获之后的新消息（v2.14.0+）
+/kata:wiki-session-ingest --full   # 强制从第一条消息重新扫
 ```
 
-The hook runs `tests/run_smoke.py` and `scripts/build_skill_md.py --check`
-on every commit that touches scripts, skills, schema, or tests. Use
-`git commit --no-verify` to skip when iterating.
+支持 Claude Code / Codex CLI（JSONL transcript 适配器，自动）以及 Gemini / Copilot /
+OpenCode / Kimi 等任意其它 CLI（LLM-dump 兜底）。原始会话 dump 是 wiki 仓库里的 markdown，
+会跟着 `wiki-sync` 走——如果会话涉及密钥，同步前自己看一眼。
+
+### 别让 spec 语料互相打架（wiki-spec）
+
+Spec-driven development 走上半年之后，没人说得清某个领域现在哪份 spec 是权威的，新 spec
+悄悄跟旧的重叠，早该归档的旧 spec 还在被引用。`wiki-spec` 在 ingest 流程里加两个检查点：
+
+```bash
+/kata:wiki-spec preflight raw/new-spec.md   # Phase 0：扫描关联旧 spec，advisory
+/kata:wiki-ingest raw/new-spec.md           # 自动跑 preflight + Phase 2 enforcement
+```
+
+作者在新 spec 的 frontmatter 里用一套词汇声明关系——`supersedes`/`refines`/`extends`/
+`parallel`/`contradicts`——这些关系进入可查询的图，`wiki-graph --mode spec-history` 能把
+血缘渲成 ASCII 树/JSON/Mermaid。**Phase 3（自动传播）默认关闭**，见上面「它做不到什么」。
+跨 wiki 的 spec 关系可以用 `kata://<peer>/<path>` 指向联邦 peer（见下一节）。
+
+### 把 kata 接进真正的写代码流水线（wiki-skill-create）
+
+kata 的文档闭环会自己合上，但**真正的工作**——搜代码、改代码、跑测试、验证——发生在闭环
+之外，要不要带着 kata 的知识回去全靠个人自觉。`wiki-skill-create` 生成一个**项目本地
+skill**，把 kata 的 query/ingest 跟这个项目的实际工作流水线焊在一起：
+
+```bash
+/kata:wiki-skill-create
+```
+
+四个 MVP 模式，挑一个贴合项目里工作实际发生的形状：
+
+| 模式 | 编码的循环 |
+|---|---|
+| `issue-fix` | 问题 → kata 查询 → 源码搜索 → 最小改动 → 测试 → 人工验证 → wiki-ingest |
+| `feature-build` | 需求 → kata 查询 → spec 草稿 → `wiki-spec preflight` → 实现 → 验证 → 把 spec 和实现两边的经验都回填 |
+| `bug-debug` | Bug → 复现 → kata 搜索（按症状也按机制）→ 根因 → 修复+回归测试 → 回填为以根因为主的经验 |
+| `custom` | 描述你自己的循环 → kata 用 query / 人工确认 / 回填三段包住它 |
+
+**补充信息去哪儿找（v2.15.1）。** 当项目工作流里查到一半、kata 本地又给不了答案时，
+`--supplement-action <source-search|web-search|doc-lookup|custom>` 决定下一步去哪儿找：
+`source-search` 查项目源码，`web-search` 联网搜，`doc-lookup` 查项目文档，`custom` 需要
+通过 `--var` 传 `CUSTOM_SUPPLEMENT_*` 变量自定义。不传时用 `suggested_supplement_action`
+启发式挑默认值——检测到编程语言栈就推荐 `source-search`，有 `docs/` 目录就推荐
+`doc-lookup`，纯 markdown 项目推荐 `web-search`，都不满足就不推荐、交给用户选。这一步在
+四个模式里插的位置不同——orchestrator 把它叫 **Phase 2.5**：`issue-fix` 第 3 步、
+`bug-debug` 第 3.5 步、`feature-build` 和 `custom` 第 2.5 步，通常卡在 kata 查询之后、
+真正动手改代码之前。
+
+生成的 SKILL.md 落在 `<project>/.claude/skills/<name>/SKILL.md`（`--target codex` 改写到
+`~/.codex/skills/`），自动侦测的技术栈（npm/cargo/pytest/go test 等）和项目名写进它的
+7 步循环。渲染后跑 **9 项静态校验**（frontmatter 能解析、必填字段齐全、name 格式、
+frontmatter ≤ 1024 字符、description 以 "Use when" 开头、第三人称、sentinel 注释存在、
+无未解析的 `{{VAR}}`、`argument-hint` 在 user-invocable 时存在）——校验不过不会自动修，
+交给用户看着改。
+
+## 多机与跨 wiki
+
+### 同一个 wiki，多台机器（wiki-sync）
+
+v1.8 加了 `wiki-sync`：`log.md` 的自定义 merge driver（union+sort，带 canonical hash 去重），
+本地同步锁，force-push 检测（比对 fetch 前后 `origin/<branch>` 的 SHA 祖先关系），wiki
+身份校验（`wiki_id` UUID 不一致直接 abort），以及仓库外的 per-machine 同步报告
+（`~/.kata/sync-reports/`，永远不在 wiki 仓库里以免自我冲突）。
+
+```bash
+/kata:wiki-init --path ~/.llm-wiki/myproject --enable-sync
+cd ~/.llm-wiki/myproject && git init -b main && git add . && git commit -m "wiki: init"
+git remote add origin git@github.com:you/myproject-wiki.git && git push -u origin main
+
+# 第二台机器
+git clone git@github.com:you/myproject-wiki.git ~/.llm-wiki/myproject
+
+/kata:wiki-sync              # 交互式：锁 + driver + fetch + merge + push
+/kata:wiki-sync --dry-run    # 预览，无副作用
+```
+
+设计过程见 [`docs/PRD-v1.8-sync.md`](docs/PRD-v1.8-sync.md)（v1 初稿 + v2~v7 六轮跨 LLM
+复审，42 条 finding 收敛，2026-05-07 MVP ready）。`dreaming/` 目前还没有 merge driver——两台
+机器同一天都跑 `wiki-dream` 会产生正常的 git 冲突，避免方法是只在一台机器跑 dream cron。
+
+### 同一台机器，多个 wiki
+
+```
+~/.llm-wiki/
+├── common/     # 默认兜底
+├── necall/     # 项目 A
+└── research/   # 项目 B
+```
+
+路径解析优先级（从高到低）：显式 `--path`/`--wiki` → `WIKI_PATH` 环境变量 → 当前目录已经
+在某个 wiki 根内 → `LLM_WIKI_PROJECT` → 项目根最近的 `.llm-wiki.yaml`/`.kata.yaml` 绑定
+文件 → 全局 `~/.llm-wiki/registry.yaml` → git 仓库名兜底 → legacy 配置 → `~/.llm-wiki/common`。
+
+`.llm-wiki.yaml` 是**单路径缓存**——一个文件只绑定一个 wiki 根，写多条 `wiki_path:` 无效，
+只认最后一条。多 wiki 共存推荐两种做法之一：每个项目仓库自己放一个 `.llm-wiki.yaml`
+（monorepo 套 submodule 时，离 cwd 更近的绑定赢），或者维护一份全局
+`~/.llm-wiki/registry.yaml`。`.llm-wiki.yaml` 属于每台机器的本地状态，git 仓库里应该
+`.gitignore` 它；registry.yaml 同理放在仓库外。
+
+**这条解析链没有天花板**——见上面「它做不到什么」。
+
+### 跨 wiki 只读联邦查询（federation）
+
+v1.12 让 kata 既能当 MCP server（`wiki-mcp-server`），也能当 MCP client 查询别的 kata
+（`wiki-federate`）。每个 wiki 在自己的根目录声明 peer：
+
+```yaml
+# {wiki_path}/.federation.yaml
+peers:
+  - name: necallkit
+    wiki_id: 7b52f6df-d7cf-47ab-b980-6042cf3a675c
+    endpoint: stdio
+    command: ["py", "-3", "path/to/kata/plugin/scripts/mcp_server.py", "--wiki", "~/.llm-wiki/NECallKit"]
+    enabled: true
+    timeout_seconds: 5
+```
+
+```bash
+/kata:wiki-federate search "F011 merge-back"   # 先跑本地，再并行 fan-out 到已启用的 peer
+/kata:wiki-federate peers                       # 列出注册的 peer
+/kata:wiki-federate resolve "kata://necallkit/decisions/F011.md"
+```
+
+结果按 `kata://<peer-name-或-wiki_id>/<path>` 的 URI 引用，日常用名字形式（可读），跨机器
+长期引用（比如 `spec_relationships:` 里）用 wiki_id 形式（更抗 peer 改名）。安全边界：
+**跨边界只读**——peer 的 MCP server 只暴露 `wiki-search`/`wiki-graph` 只读子集/
+`wiki-spec-preflight`，任何写 skill 都不会跨联邦暴露；**每次连接都做身份校验**——peer 报的
+`wiki_id` 跟 `.federation.yaml` 里登记的不一致就拒绝这个 peer；**没有传递解析**——A 引用 B、
+B 又引用 C，A 不会自动追到 C；peer 不可达/超时/`wiki_id` 不匹配都不会让本地查询失败，只在
+返回结果的 `federation` 诊断块里体现。查询内容会原样发给每个 peer——敏感查询用
+`--no-federate`。
+
+## 参考
+
+**Works with：** Claude Code（`.claude-plugin/`）、Codex CLI（生成的 skills）、任意 LLM
+（`SKILL.md` 作为 system prompt）、GitHub Copilot CLI（根目录 `plugin.json`）、Obsidian
+（wiki 就是一个 vault：`[[wikilinks]]`、Graph view、Dataview 查 frontmatter、Web Clipper
+存 `raw/articles/`、Marp 渲染 `wiki-query --format=slides`）。wiki 默认是 git 仓库，
+`wiki-init` 最后一步会建议 `git init`。
+
+**Scaling：** < 100 页用内置 `wiki-search`；100–500 页记得常跑 `wiki-lint` 保持 `index.md`
+新鲜；500–2000 页装 [qmd](https://github.com/tobi/qmd)（BM25 + 向量混合 + LLM 重排，
+`wiki-search` 会自动探测并 shell out）；2000+ 页用 qmd 的 MCP server 模式。
+
+**文档索引：**
+
+- [`docs/PRD-v1.8-sync.md`](docs/PRD-v1.8-sync.md) — 多机同步设计
+- [`docs/PRD-v1.12-cross-wiki-federation.md`](docs/PRD-v1.12-cross-wiki-federation.md) — 联邦设计
+- [`docs/PRD-v1.13-spec-history-management.md`](docs/PRD-v1.13-spec-history-management.md)、
+  [`docs/PRD-v1.14-spec-propagation-reconcile.md`](docs/PRD-v1.14-spec-propagation-reconcile.md) — spec 历史管理
+- [`docs/PRD-v1.15-work-loop-bridge.md`](docs/PRD-v1.15-work-loop-bridge.md) — work-loop bridge
+- [`docs/dreaming.md`](docs/dreaming.md)、[`docs/watcher.md`](docs/watcher.md) — auto-dreaming / watcher 设计
+- [`plugin/PLUGINS.md`](plugin/PLUGINS.md) — 外部兜底插件清单格式
+- 每个 skill 的完整行为以其 `plugin/skills/<name>/SKILL.md` 为准——README 只讲定位和常用姿势
+
+**Contributing：**
+
+```bash
+git config --local core.hooksPath .githooks   # 启用 pre-commit smoke test
+python tests/run_smoke.py                      # 手动跑一遍，跟 CI 一致
+python scripts/build_skill_md.py               # 加了新 skill 后重新生成 SKILL.md 汇总表
+```
 
 ## Origin
 
-Concept by [Andrej Karpathy](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
-(May 2025). Plugin design pattern from [PhoenixTeam](https://github.com/litianyi-007/PhoenixTeam).
+概念来自 [Andrej Karpathy](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
+（2025 年 5 月）。插件设计范式参考
+[SpecTeam](https://github.com/litianyi-007/SpecTeam)。
 
-This plugin aims to be a **faithful, opinionated implementation** of Karpathy's
-intentionally abstract concept. Where the original says _"everything mentioned
-above is optional and modular"_, we made concrete choices (SCHEMA.md as the single
-config, interactive domain-specific init, three-tier memory aging) while preserving
-the core invariants: filesystem as the only source of truth, raw immutability,
-human curates / LLM maintains, knowledge compiles once and compounds.
+这个插件的目标是做 Karpathy 那个刻意留白的构想的一份**忠实、有主张的实现**。原文说「上面
+提到的一切都是可选、可拼装的」，我们做了具体的选择（SCHEMA.md 作为单一配置、交互式领域
+启动、三层记忆老化），同时保留核心不变量：文件系统是唯一真相源、raw 不可变、人类策展/LLM
+维护、知识编译一次然后持续复合。
+
+License: MIT. 见 [LICENSE](LICENSE)。

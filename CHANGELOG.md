@@ -4,6 +4,84 @@ All notable changes to Kata (previously `ak-wiki` — see v2.0.0 below) are
 recorded here. The plugin follows [semver](https://semver.org/) — major
 bumps signal a manifest or skill-API change.
 
+## [2.16.0] — 2026-08-03 — 文档审计：manifest 漂移、README 重排、测试密闭化
+
+A documentation-and-guards pass modelled on the same audit just run against the
+sibling plugins (harnessloop, hopper). No skill behavior changed. Four findings,
+all of them cases where something was declared once and then drifted because
+nothing executed the check.
+
+### Fixed
+
+- **The "N skills" sentence had drifted in three directions at once.** The four
+  manifests declared **17 / 13 / 18 / 18** against an actual **18** — and the two
+  most user-facing ones were the two most wrong:
+  `plugin/.claude-plugin/plugin.json` (what Claude Code shows at install time)
+  said 17 and its name list omitted `skill-create`; `.claude-plugin/marketplace.json`
+  (what the marketplace listing shows) said 13. Version *numbers* were guarded by
+  Test 62 and were all correctly at 2.15.5 — the guard simply never covered this
+  natural-language claim.
+- **README documented 12 of 18 skills.** `wiki-config`, `wiki-federate` and
+  `wiki-mcp-server` appeared **nowhere in 1501 lines**; cross-wiki federation
+  (v2.8.0–v2.11.1, four releases) was mentioned twice as a word and never as a
+  capability; `wiki-skill-create`'s supplement-action catalog (v2.15.1) was absent.
+  README also contained both "13 skills" and "18 skills", and said "four parallel
+  install paths" immediately followed by "identical across all three".
+- **Dead attribution link** — `PhoenixTeam` returns 404; the repo was renamed to
+  `SpecTeam`. v2.15.5's rename pass updated the owner but not the repo name.
+- **"7 review rounds"** for PRD-v1.8 — the revision history is v1 draft plus
+  **six** review rounds (v2–v7); the 42-findings figure was correct.
+
+### Added — guards, so these cannot drift back silently
+
+- **Test 62b**: every manifest's declared skill count *and* name list is checked
+  against a live `plugin/skills/` directory enumeration. Nothing is hardcoded —
+  adding a skill without updating the manifests goes red. (Destructive proof both
+  ways: a stray skill dir → red; a corrupted digit → red.)
+- **CI `paths:` now includes `**.json`.** Three of the four version sources Test 62
+  checks are JSON files that were **not** in the trigger list, so a JSON-only
+  version bump ran no CI at all and the guard never fired. Test 62 exists because
+  `SKILL.md`'s version once sat two releases behind — the guard was real, its
+  execution was not.
+- **`macos-latest` added to the CI matrix** (was ubuntu + windows only).
+
+### Fixed — the test suite could not finish on any machine that uses kata
+
+`Test 17`'s fixture lived under `tests/`, and `find_wiki_root()`'s binding lookup
+walks every ancestor to `/` with no ceiling — so it found this project's own
+dogfood `.llm-wiki.yaml` and resolved to the real wiki instead of the fixture.
+The suite aborted there: **92 of 267 checks ran locally**, and everything after
+Test 17 — including Test 62b above — only ever executed on CI, whose runners have
+no `~/.llm-wiki/`. Since kata's entire purpose is maintaining `~/.llm-wiki/`,
+**every real user's machine hits this**.
+
+The fixture now lives under `tempfile.mkdtemp()`, outside the project's ancestor
+chain. This also surfaced two latent assertions in the same block that the abort
+had been masking. **The resolver itself was not changed** — its unbounded walk is
+relied on by the documented nested-override pattern, so it is recorded in
+`docs/ISSUE-project-binding-unbounded-ancestor-walk.md` rather than "fixed" into
+a regression.
+
+### Changed — README
+
+1501 lines (English) → **490 lines, Chinese as the default**, matching the sibling
+plugins. English and Japanese versions follow separately. The stale
+"Dogfood status (updated 2026-05-15)" block is gone — it promised a retrospective
+and GA decision that never happened across 20+ releases, and the underlying
+`docs/dogfood-*.md` sections are still unfilled template placeholders. The 9-skill
+architecture diagram is gone rather than redrawn, because an enumerating diagram
+is what went stale in the first place. A new "它做不到什么 / 边界的真实情况" section
+states the verified boundaries (federation is read-only across the boundary;
+`wiki-watch` never invokes `wiki-ingest` itself; external plugins reject
+`command_template` and shell metacharacters; Phase 3 propagation is an opt-in
+preview) alongside the real limits, unvarnished.
+
+Test 19's README assertions rode on English prose and broke the moment the README
+became Chinese, even though the instruction it checks was still present. The two
+assertions anchored on never-translated tokens (a path, a filename) survived
+untouched; the prose one now carries an explicit per-language marker set, so
+adding a translation means adding its phrasing rather than silently losing the check.
+
 ## [2.15.5] — 2026-08-02 — GitHub owner handle rename (surebeli → litianyi-007)
 
 Patch release, non-functional: the plugin author's GitHub account was renamed;
